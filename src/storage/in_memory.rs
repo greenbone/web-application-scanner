@@ -11,6 +11,7 @@ use crate::api::dto::scans::ScanStatus;
 
 use super::interface::{ResultRecord, ScanRecord, ScanStorage, StorageError};
 
+/// In-memory state for the InMemoryStorage backend.
 struct InnerState {
     scans: HashMap<String, ScanRecord>,
     /// Results per scan ID, stored in insertion (ascending id) order.
@@ -24,6 +25,7 @@ pub struct InMemoryStorage {
 }
 
 impl InMemoryStorage {
+    /// Create a new empty in-memory storage instance.
     pub fn new() -> Self {
         Self {
             state: Arc::new(RwLock::new(InnerState {

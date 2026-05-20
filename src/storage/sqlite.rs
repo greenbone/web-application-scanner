@@ -14,6 +14,9 @@ use crate::api::dto::scans::{ResultType, ScanStatus, ScannerPreference, Target, 
 use super::interface::{ResultRecord, ScanRecord, ScanStorage, StorageError};
 
 /// SQLite-backed storage using an async connection pool.
+///
+/// Opens a SQLite database with WAL mode and foreign keys enabled.
+/// Schema is automatically created on initialization.
 pub struct SqliteStorage {
     pool: SqlitePool,
 }

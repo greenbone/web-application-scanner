@@ -2,10 +2,16 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Logging setup and initialization.
+
 use tracing_subscriber::{EnvFilter, fmt};
 
 use crate::config::settings::Settings;
 
+/// Initialize logging based on configuration settings.
+///
+/// Supports both text (fmt) and JSON output formats.
+/// Log level filtering is controlled via the settings or RUST_LOG environment variable.
 pub fn init_logging(settings: &Settings) {
     let env_filter = env_filter_from(&settings.log_level);
 
@@ -31,6 +37,7 @@ pub fn init_logging(settings: &Settings) {
     }
 }
 
+/// Initialize the log filter from the provided log level string.
 fn env_filter_from(log_level: &str) -> EnvFilter {
     EnvFilter::try_new(log_level).unwrap_or_else(|_| EnvFilter::new("info"))
 }
