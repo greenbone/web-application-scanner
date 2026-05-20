@@ -2,8 +2,4 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub const API_VERSION: &str = "v1";
-
-pub mod dto;
-pub mod health;
 pub mod scans;

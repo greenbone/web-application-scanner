@@ -21,7 +21,18 @@ pub fn build_router() -> Router {
         .route("/health/started", get(api::health::get_health_started));
 
     // TODO: Add authentication middleware to private routes
-    let private_routes = Router::new().route("/scans", get(api::scans::get_scans));
+    let private_routes = Router::new()
+        .route("/scans", head(api::scans::head_scans).post(api::scans::create_scan))
+        .route("/scans/preferences", get(api::scans::get_scan_preferences))
+        .route(
+            "/scans/:id",
+            get(api::scans::get_scan)
+                .post(api::scans::scan_action)
+                .delete(api::scans::delete_scan),
+        )
+        .route("/scans/:id/results", get(api::scans::get_scan_results))
+        .route("/scans/:id/results/:rid", get(api::scans::get_scan_result))
+        .route("/scans/:id/status", get(api::scans::get_scan_status));
 
     Router::new()
         .nest(&API_BASE_PATH, public_routes)
