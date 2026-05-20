@@ -5,6 +5,9 @@ pub enum AppError {
     #[error("failed to load settings: {0}")]
     Settings(#[from] config::ConfigError),
 
+    #[error("failed to initialize storage: {0}")]
+    Storage(String),
+
     #[error("failed to bind TCP listener: {0}")]
     Bind(#[source] std::io::Error),
 
