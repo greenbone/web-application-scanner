@@ -2,12 +2,20 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Abstract storage interface and domain models.
+//!
+//! Defines the `ScanStorage` trait that all backends must implement,
+//! along with `ScanRecord`, `ResultRecord`, and related types.
+
 use async_trait::async_trait;
 use thiserror::Error;
 
 use crate::api::dto::scans::{ResultType, ScanStatus, ScannerPreference, Target, Vt};
 
 /// Full persisted scan record.
+///
+/// Represents a complete scan request with its associated VTs (vulnerability tests)
+/// and configuration, along with lifecycle timestamps and status.
 #[derive(Debug, Clone)]
 pub struct ScanRecord {
     pub id: String,
@@ -20,6 +28,9 @@ pub struct ScanRecord {
 }
 
 /// A single persisted result for a scan.
+///
+/// Represents an individual finding, message, or event generated during scan execution.
+/// Results are stored with an auto-incremented `id` unique within their parent scan.
 #[derive(Debug, Clone)]
 pub struct ResultRecord {
     /// 0-based auto-incremented index within the scan.
@@ -36,6 +47,8 @@ pub struct ResultRecord {
 }
 
 /// Errors returned by storage operations.
+///
+/// Covers not-found, already-exists, invalid state transitions, bad ranges, and backend errors.
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("scan not found: {0}")]
@@ -85,8 +98,8 @@ pub fn parse_range(range: &str) -> Result<(usize, Option<usize>), StorageError> 
 
 /// Abstract interface covering persistence of scans and their results.
 ///
-/// Implementations must be `Send + Sync` so the same instance can be shared
-/// across async tasks and Axum handler threads.
+/// Implementations must be thread-safe (`Send + Sync`) so the same instance
+/// can be shared across async tasks and Axum handler threads.
 #[async_trait]
 pub trait ScanStorage: Send + Sync {
     /// Persist a new scan. Returns [`StorageError::AlreadyExists`] if the ID

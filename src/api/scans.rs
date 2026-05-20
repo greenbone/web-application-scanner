@@ -21,13 +21,16 @@ use crate::{
     storage::interface::{ResultRecord, ScanRecord, StorageError, parse_range},
 };
 
+/// Query parameters for the GET `/scans/:id/results` endpoint.
 #[derive(Debug, Deserialize)]
 pub struct ResultRangeQuery {
+    /// Optional range specification (e.g., "5" or "0-10").
     pub range: Option<String>,
 }
 
 // ─── Error mapping ────────────────────────────────────────────────────────────
 
+/// Convert storage errors to appropriate HTTP responses.
 fn storage_err(e: StorageError) -> Response {
     match e {
         StorageError::NotFound(_) | StorageError::ResultNotFound(_, _) => {
@@ -45,6 +48,7 @@ fn storage_err(e: StorageError) -> Response {
 
 // ─── Result conversion ────────────────────────────────────────────────────────
 
+/// Convert a storage result record into an API response.
 fn result_response(r: ResultRecord) -> ScanResultResponse {
     ScanResultResponse {
         id: r.id,
@@ -61,6 +65,7 @@ fn result_response(r: ResultRecord) -> ScanResultResponse {
 
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
+/// HEAD /scans — Return API and authentication metadata as headers.
 pub async fn head_scans() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -74,6 +79,9 @@ pub async fn head_scans() -> impl IntoResponse {
     (StatusCode::NO_CONTENT, headers)
 }
 
+/// POST /scans — Create a new scan and return its UUID.
+///
+/// Returns 201 Created with the generated scan ID if successful.
 pub async fn create_scan(
     State(state): State<AppState>,
     Json(req): Json<ScanRequest>,
@@ -94,10 +102,15 @@ pub async fn create_scan(
     }
 }
 
+/// GET /scans/preferences — Retrieve available scan preferences.
 pub async fn get_scan_preferences() -> Json<PreferencesResponse> {
     Json(PreferencesResponse::default())
 }
 
+/// GET /scans/:id — Retrieve scan details.
+///
+/// Returns the target, scan preferences, and VTs for the requested scan.
+/// Returns 404 if the scan does not exist.
 pub async fn get_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -114,6 +127,10 @@ pub async fn get_scan(
     }
 }
 
+/// POST /scans/:id — Perform an action on a scan (start or stop).
+///
+/// Enforces state transitions: Start only from Stored/Succeeded/Failed,
+/// Stop only from Requested/Running. Returns 406 if transition is invalid.
 pub async fn scan_action(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -143,6 +160,9 @@ pub async fn scan_action(
     }
 }
 
+/// DELETE /scans/:id — Delete a scan and all its results.
+///
+/// Returns 406 if the scan is Running or Requested (cannot delete active scans).
 pub async fn delete_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -161,6 +181,10 @@ pub async fn delete_scan(
     }
 }
 
+/// GET /scans/:id/results — Retrieve scan results with optional range filtering.
+///
+/// Query parameter `range` accepts `N` (all from N onward) or `N-M` (inclusive range).
+/// Defaults to all results if not specified.
 pub async fn get_scan_results(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -181,6 +205,9 @@ pub async fn get_scan_results(
     }
 }
 
+/// GET /scans/:id/results/:rid — Retrieve a single scan result by index.
+///
+/// The `:rid` parameter is a 0-based result index. Returns 404 if not found.
 pub async fn get_scan_result(
     State(state): State<AppState>,
     Path((id, rid)): Path<(String, String)>,
@@ -196,6 +223,9 @@ pub async fn get_scan_result(
     }
 }
 
+/// GET /scans/:id/status — Retrieve the current status and timestamps of a scan.
+///
+/// Returns the status, start time, and end time of the scan.
 pub async fn get_scan_status(
     State(state): State<AppState>,
     Path(id): Path<String>,

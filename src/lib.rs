@@ -2,6 +2,13 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Greenbone Web Application Scanner (WAS)
+//!
+//! Greenbone WAS is a wrapper for the web application vulnerability scanner
+//! *[Zed Attack Proxy (ZAP)](https://www.zaproxy.org/)* that offers an API
+//! based on the [openvasd scanner API](https://greenbone.github.io/scanner-api/)
+//! to run scans and retrieve results.
+
 pub mod api;
 pub mod app;
 pub mod config;
@@ -22,6 +29,7 @@ use crate::{
 
 use tracing::info;
 
+/// Initialize and run the web application scanner service. 
 pub async fn run() -> Result<(), AppError> {
     let settings = Settings::load()?;
     logging::init_logging(&settings);

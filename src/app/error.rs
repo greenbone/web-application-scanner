@@ -1,5 +1,12 @@
+// SPDX-FileCopyrightText: 2026 Greenbone AG
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+//! Application-level error types.
+
 use thiserror::Error;
 
+/// Errors that can occur during application startup and operation.
 #[derive(Debug, Error)]
 pub enum AppError {
     #[error("failed to load settings: {0}")]

@@ -2,6 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! HTTP server router setup.
+
 use axum::{
     Router,
     routing::{get, head},
@@ -10,9 +12,14 @@ use tower_http::trace::TraceLayer;
 
 use crate::{api, app::AppState};
 
+/// Base path for all API endpoints including the API version.
 pub static API_BASE_PATH: std::sync::LazyLock<String> =
     std::sync::LazyLock::new(|| format!("/api/{}", api::API_VERSION));
 
+/// Build and configure the Axum router with all public and private endpoints.
+///
+/// Public endpoints handle health checks. Private endpoints handle scan operations.
+/// All endpoints are nested under the API base path.
 pub fn build_router(state: AppState) -> Router {
     let public_routes = Router::new()
         .route("/health", head(api::health::head_health))

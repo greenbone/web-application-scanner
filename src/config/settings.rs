@@ -5,9 +5,16 @@
 use config::{Config, ConfigBuilder, ConfigError, Environment, builder::DefaultState};
 use serde::Deserialize;
 
+/// Default log format (text format).
 pub const DEFAULT_LOG_FORMAT: &str = "fmt";
+
+/// Default log level (info messages and above).
 pub const DEFAULT_LOG_LEVEL: &str = "info";
+
+/// Default HTTP server port.
 pub const DEFAULT_PORT: u16 = 8030;
+
+/// Default storage backend (in-memory).
 pub const DEFAULT_STORAGE_BACKEND: &str = "inmemory";
 
 /// Runtime selection of the storage backend.
@@ -42,6 +49,10 @@ struct RawSettings {
 }
 
 impl Settings {
+    /// Load settings from environment variables and `.env` file.
+    ///
+    /// Environment variables prefixed with `GREENBONE_WAS_` override defaults.
+    /// If no `.env` file exists, falls back to defaults and environment variables.
     pub fn load() -> Result<Self, ConfigError> {
         let _ = dotenvy::dotenv();
 
@@ -53,6 +64,7 @@ impl Settings {
         Self::from_raw(raw_settings)
     }
 
+    /// Create a configuration builder with default values.
     fn config_builder() -> Result<ConfigBuilder<DefaultState>, ConfigError> {
         Config::builder()
             .set_default("log_format", "fmt")?
@@ -62,6 +74,7 @@ impl Settings {
             .set_default("sqlite_url", "")
     }
 
+    /// Validate and convert raw settings into typed `Settings`.
     fn from_raw(raw: RawSettings) -> Result<Self, ConfigError> {
         if raw.port == 0 {
             return Err(ConfigError::Message(
