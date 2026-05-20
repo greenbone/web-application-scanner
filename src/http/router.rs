@@ -8,12 +8,12 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 
-use crate::api;
+use crate::{api, app::AppState};
 
 pub static API_BASE_PATH: std::sync::LazyLock<String> =
     std::sync::LazyLock::new(|| format!("/api/{}", api::API_VERSION));
 
-pub fn build_router() -> Router {
+pub fn build_router(state: AppState) -> Router {
     let public_routes = Router::new()
         .route("/health", head(api::health::head_health))
         .route("/health/alive", get(api::health::get_health_alive))
@@ -38,4 +38,5 @@ pub fn build_router() -> Router {
         .nest(&API_BASE_PATH, public_routes)
         .nest(&API_BASE_PATH, private_routes)
         .layer(TraceLayer::new_for_http())
+        .with_state(state)
 }
