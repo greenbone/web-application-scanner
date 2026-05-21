@@ -15,6 +15,7 @@ pub mod config;
 pub mod http;
 pub mod logging;
 pub mod storage;
+pub mod zapclient;
 
 use std::sync::Arc;
 

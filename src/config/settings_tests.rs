@@ -15,6 +15,8 @@ fn clear_env() {
         env::remove_var("GREENBONE_WAS_PORT");
         env::remove_var("GREENBONE_WAS_STORAGE_BACKEND");
         env::remove_var("GREENBONE_WAS_SQLITE_URL");
+        env::remove_var("GREENBONE_WAS_ZAP_BASE_URL");
+        env::remove_var("GREENBONE_WAS_ZAP_API_KEY");
     }
 }
 
@@ -29,6 +31,8 @@ fn test_uses_defaults_when_env_is_unset() {
     assert_eq!(settings.port, settings::DEFAULT_PORT);
     assert_eq!(settings.storage_backend, StorageBackend::InMemory);
     assert!(settings.sqlite_url.is_none());
+    assert_eq!(settings.zap_base_url, settings::DEFAULT_ZAP_BASE_URL);
+    assert_eq!(settings.zap_api_key, settings::DEFAULT_ZAP_API_KEY);
 }
 
 #[test]
@@ -41,6 +45,8 @@ fn test_uses_env_overrides_when_set() {
         env::set_var("GREENBONE_WAS_PORT", "8080");
         env::set_var("GREENBONE_WAS_STORAGE_BACKEND", "sqlite");
         env::set_var("GREENBONE_WAS_SQLITE_URL", "sqlite:scans.db");
+        env::set_var("GREENBONE_WAS_ZAP_BASE_URL", "http://127.0.0.1:8081");
+        env::set_var("GREENBONE_WAS_ZAP_API_KEY", "non-default-api-key");
     };
 
     let settings = Settings::load().expect("Failed to load settings");
@@ -49,6 +55,8 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.port, 8080);
     assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
     assert_eq!(settings.sqlite_url, Some("sqlite:scans.db".to_string()));
+    assert_eq!(settings.zap_base_url, "http://127.0.0.1:8081");
+    assert_eq!(settings.zap_api_key, "non-default-api-key");
 }
 
 #[test]

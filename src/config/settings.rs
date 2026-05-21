@@ -17,6 +17,12 @@ pub const DEFAULT_PORT: u16 = 8030;
 /// Default storage backend (in-memory).
 pub const DEFAULT_STORAGE_BACKEND: &str = "inmemory";
 
+/// Default ZAP API base URL.
+pub const DEFAULT_ZAP_BASE_URL: &str = "http://127.0.0.1:8547";
+
+/// Default ZAP API key.
+pub const DEFAULT_ZAP_API_KEY: &str = "test-api-key";
+
 /// Runtime selection of the storage backend.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StorageBackend {
@@ -37,6 +43,10 @@ pub struct Settings {
     /// SQLite connection URL (e.g. `sqlite:scans.db`).
     /// Required when `storage_backend` is [`StorageBackend::Sqlite`].
     pub sqlite_url: Option<String>,
+    /// Base URL for the ZAP HTTP API.
+    pub zap_base_url: String,
+    /// API key used for authenticated ZAP API calls.
+    pub zap_api_key: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -46,6 +56,8 @@ struct RawSettings {
     port: u16,
     storage_backend: String,
     sqlite_url: String,
+    zap_base_url: String,
+    zap_api_key: String,
 }
 
 impl Settings {
@@ -71,7 +83,9 @@ impl Settings {
             .set_default("log_level", "info")?
             .set_default("port", 8030)?
             .set_default("storage_backend", DEFAULT_STORAGE_BACKEND)?
-            .set_default("sqlite_url", "")
+            .set_default("sqlite_url", "")?
+            .set_default("zap_base_url", DEFAULT_ZAP_BASE_URL)?
+            .set_default("zap_api_key", DEFAULT_ZAP_API_KEY)
     }
 
     /// Validate and convert raw settings into typed `Settings`.
@@ -112,6 +126,8 @@ impl Settings {
             port: raw.port,
             storage_backend,
             sqlite_url,
+            zap_base_url: raw.zap_base_url,
+            zap_api_key: raw.zap_api_key,
         })
     }
 }
