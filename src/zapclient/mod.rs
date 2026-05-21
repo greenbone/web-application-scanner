@@ -4,6 +4,7 @@
 
 //! HTTP client for communicating with the ZAP API.
 
+pub mod ajaxspider;
 pub mod context;
 
 use crate::config::settings::Settings;
