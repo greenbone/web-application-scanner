@@ -32,6 +32,10 @@ pub enum ZapClientError {
     /// ZAP API response could not be parsed.
     #[error("failed to parse ZAP API response: {0}")]
     ParseResponse(#[from] serde_json::Error),
+
+    /// ZAP API returned an unexpected content in the response body.
+    #[error("ZAP API returned unexpected content in field {field}: {content}")]
+    UnexpectedContent { field: String, content: String },
 }
 
 /// Lightweight client for issuing ZAP API requests.
