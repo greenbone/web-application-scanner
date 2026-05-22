@@ -5,6 +5,7 @@
 //! HTTP client for communicating with the ZAP API.
 
 pub mod ajaxspider;
+pub mod ascan;
 pub mod context;
 
 use crate::config::settings::Settings;
@@ -34,7 +35,7 @@ pub enum ZapClientError {
     #[error("failed to parse ZAP API response: {0}")]
     ParseResponse(#[from] serde_json::Error),
 
-    /// ZAP API returned an unexpected content in the response body.
+    /// ZAP API returned unexpected content in the response body.
     #[error("ZAP API returned unexpected content in field {field}: {content}")]
     UnexpectedContent { field: String, content: String },
 }
