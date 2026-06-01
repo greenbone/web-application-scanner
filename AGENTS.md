@@ -18,3 +18,7 @@ The code for main the Greenbone Web Application scanner is organized into the fo
 Unit tests should use the sidecar / companion file pattern, e.g. tests for `xyz.rs` are found in `xyz_tests.rs`.
 
 Testing guidelines for specific modules or features may be found in the `doc/specs` directory.
+
+- Always document the intention of tests. Test names, fixture names, or short
+  comments should make clear which behavior, regression, or contract the test
+  protects.
