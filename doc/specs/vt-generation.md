@@ -104,7 +104,7 @@ canonical NASL metadata.
 | `lastmod` | `script_tag(name:"last_modification", value:"...")` | No | Use only if present; otherwise use the generation timestamp. |
 | `alerttype` | `script_category(ACT_GATHER_INFO)` and `script_xref(name:"ZAP-Alert-Type", value:"...")` | Yes | Generated NASL scripts are metadata containers and never execute ZAP directly. |
 | Fixed WAS family | `script_family("Web application scanner")` | Yes | Use the existing WAS script family. |
-| `risk` | `script_tag(name:"cvss_base", ...)`, `script_tag(name:"cvss_base_vector", ...)`, and `script_tag(name:"severity_origin", value:"Greenbone")` | No | Emit only when present and mapped. See severity mapping below. |
+| `risk` | No CVSS metadata by itself | No | ZAP `risk` is coarse source metadata and must not be converted into `cvss_base` or `cvss_base_vector`. See severity mapping below. |
 | `alerttype` and source class | `script_tag(name:"qod_type", value:"...")` | Yes | See QoD mapping below. |
 | Body text | `script_tag(name:"summary", value:"...")` | Yes | Use the first non-empty normalized paragraph. Use the title as the summary only when no body text exists. |
 | `other` | `script_tag(name:"vuldetect", value:"...")` or omit | No | Use only when it describes generic detection behavior. Omit placeholder or instance-specific example values. |
@@ -160,31 +160,18 @@ passive, active, script, WebSocket, client, or tool-originated findings:
 
 ## Severity Mapping
 
-The ZAP alert docs provide coarse `risk` values, not canonical CVSS vectors.
-Generated NASL should include stable severity metadata when a source `risk`
-value exists.
+The ZAP alert docs provide coarse `risk` values, not canonical CVSS scores or
+vectors. Do not derive `cvss_base`, `cvss_base_vector`, or `severity_origin`
+from `risk`, title, alert type, alert ID, or any other inferred signal.
 
-Use this initial deterministic mapping:
+Generated NASL must emit `cvss_base` and `cvss_base_vector` only when those
+values are explicitly present in the source alert documentation. When explicit
+CVSS values are absent, omit `cvss_base`, `cvss_base_vector`, and
+`severity_origin`.
 
-| ZAP `risk` | `cvss_base` | `cvss_base_vector` |
-| --- | --- | --- |
-| `Info` | `0.0` | `AV:N/AC:L/Au:N/C:N/I:N/A:N` |
-| `Informational` | `0.0` | `AV:N/AC:L/Au:N/C:N/I:N/A:N` |
-| `Low` | `3.5` | `AV:N/AC:H/Au:N/C:P/I:N/A:N` |
-| `Medium` | `6.4` | `AV:N/AC:L/Au:N/C:P/I:P/A:N` |
-| `High` | `7.5` | `AV:N/AC:L/Au:N/C:P/I:P/A:P` |
-
-This mapping is intentionally conservative and source-derived. It must not be
-presented as vendor CVSS. If ZAP or another authoritative source later provides
-CVSS vectors per alert, those vectors should replace this table.
-
-Because the generated vector is a Greenbone policy decision, emit
-`script_tag(name:"severity_origin", value:"Greenbone")` for generated
-severities.
-
-If `risk` is missing, omit `cvss_base`, `cvss_base_vector`, and
-`severity_origin`. Do not invent a fallback severity from the title, alert type,
-or alert ID.
+If ZAP or another authoritative source later provides CVSS scores and vectors
+per alert, those source-provided values may be emitted with an appropriate
+`severity_origin`.
 
 ## QoD Mapping
 
@@ -287,9 +274,6 @@ if (description)
   script_family("Web application scanner");
   script_copyright("Copyright (C) 2026 Greenbone AG");
 
-  script_tag(name:"cvss_base", value:"6.4");
-  script_tag(name:"cvss_base_vector", value:"AV:N/AC:L/Au:N/C:P/I:P/A:N");
-  script_tag(name:"severity_origin", value:"Greenbone");
   script_tag(name:"qod_type", value:"remote_analysis");
 
   script_xref(name:"ZAP-Alert-ID", value:"10020-1");

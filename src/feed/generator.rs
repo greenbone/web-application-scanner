@@ -8,7 +8,7 @@ use super::{
     alert_doc::{AlertDoc, AlertId, AlertKind},
     nasl::{
         NaslMetadata, Tag, Xref, encode_oid, normalize_body_summary, normalize_text, render,
-        severity_from_risk, solution_type,
+        solution_type,
     },
     validation::ValidationReport,
 };
@@ -163,16 +163,6 @@ fn generate_candidate(
     }
 
     let title = title?;
-    let risk = doc.risk.as_deref();
-    let severity = risk.and_then(severity_from_risk);
-    if risk.is_some() && severity.is_none() {
-        report.warning(
-            doc.path.clone(),
-            Some(alert_id.clone()),
-            format!("unknown risk value: {}", risk.unwrap_or_default()),
-        );
-    }
-
     let mut xrefs = BTreeSet::new();
     insert_xref(&mut xrefs, "ZAP-Alert-ID", &alert_id);
     if let Some(value) = &doc.alert_index {
@@ -261,9 +251,6 @@ fn generate_candidate(
         });
     }
 
-    let (cvss_base, cvss_base_vector) = severity
-        .map(|(base, vector)| (Some(base.to_string()), Some(vector.to_string())))
-        .unwrap_or((None, None));
     let metadata = NaslMetadata {
         oid: oid.clone(),
         version_date: config.version_date.clone(),
@@ -277,8 +264,9 @@ fn generate_candidate(
             .unwrap_or_else(|| config.version_date.clone()),
         name: title,
         copyright_year: config.version_date.chars().take(4).collect(),
-        cvss_base,
-        cvss_base_vector,
+        cvss_base: doc.cvss_base.clone(),
+        cvss_base_vector: doc.cvss_base_vector.clone(),
+        severity_origin: doc.severity_origin.clone(),
         xrefs,
         cves,
         tags,
@@ -503,7 +491,9 @@ The response does not protect against clickjacking.
                 "script_xref(name:\"ZAP-Alert-Set\", value:\"Anti-clickjacking Header\");"
             )
         );
-        assert!(nasl.contains("script_tag(name:\"cvss_base\", value:\"6.4\");"));
+        assert!(!nasl.contains("script_tag(name:\"cvss_base\""));
+        assert!(!nasl.contains("script_tag(name:\"cvss_base_vector\""));
+        assert!(!nasl.contains("script_tag(name:\"severity_origin\""));
         assert!(nasl.contains("script_xref(name:\"OWASP\", value:\"OWASP_2021_A05\");"));
         assert!(nasl.contains("script_xref(name:\"OWASP-API\", value:\"OWASP_2023_API4\");"));
         assert!(!nasl.contains("CUSTOM_PAYLOADS"));
@@ -586,6 +576,48 @@ This alert is deprecated.
                 .rendered
                 .contains("script_xref(name:\"ZAP-Status\", value:\"deprecated\");")
         );
+    }
+
+    #[test]
+    fn explicit_cvss_fields_are_rendered_without_risk_inference() {
+        let doc = parse(
+            "40012.md",
+            r#"---
+title: "XSS"
+alertid: 40012
+alertindex: 4001200
+alerttype: "Active"
+status: release
+type: alert
+risk: Medium
+cvss_base: "5.0"
+cvss_base_vector: "AV:N/AC:L/Au:N/C:P/I:N/A:N"
+severity_origin: "ZAP"
+solution: "Validate input."
+cwe: 79
+wasc: 8
+alerttags: []
+---
+Summary.
+"#,
+        );
+
+        let (vts, report) = generate_vts(
+            vec![doc],
+            &GenerateConfig {
+                contributor: 123456,
+                version_date: "2026-06-01T00:00:00+0000".to_string(),
+            },
+        );
+
+        assert!(!report.has_errors(), "{:?}", report.diagnostics());
+        assert_eq!(vts.len(), 1);
+        let nasl = &vts[0].rendered;
+        assert!(nasl.contains("script_tag(name:\"cvss_base\", value:\"5.0\");"));
+        assert!(nasl.contains(
+            "script_tag(name:\"cvss_base_vector\", value:\"AV:N/AC:L/Au:N/C:P/I:N/A:N\");"
+        ));
+        assert!(nasl.contains("script_tag(name:\"severity_origin\", value:\"ZAP\");"));
     }
 
     #[test]
