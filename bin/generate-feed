@@ -1,0 +1,278 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BIN_DIR="$ROOT/bin"
+TMP_DIR="$ROOT/tmp"
+ZAP_REPO="$TMP_DIR/zaproxy-website"
+ZAP_ALERTS="$ZAP_REPO/site/content/docs/alerts"
+FEED_DIR="$TMP_DIR/feed"
+SCANNERCTL="$BIN_DIR/scannerctl"
+
+ZAP_REPO_URL="${ZAP_REPO_URL:-https://github.com/zaproxy/zaproxy-website.git}"
+OPENVAS_RELEASE_API="${OPENVAS_RELEASE_API:-https://api.github.com/repos/greenbone/openvas-scanner/releases/latest}"
+
+log() {
+  printf '==> %s\n' "$*"
+}
+
+require_command() {
+  if ! command -v "$1" >/dev/null 2>&1; then
+    printf 'error: required command not found: %s\n' "$1" >&2
+    exit 1
+  fi
+}
+
+clone_zap_repository() {
+  mkdir -p "$TMP_DIR"
+
+  if [[ -d "$ZAP_REPO/.git" ]]; then
+    log "updating ZAP repository in $ZAP_REPO"
+    git -C "$ZAP_REPO" pull --ff-only
+  else
+    log "cloning ZAP repository into $ZAP_REPO"
+    git clone --depth=1 "$ZAP_REPO_URL" "$ZAP_REPO"
+  fi
+
+  if [[ ! -d "$ZAP_ALERTS" ]]; then
+    printf 'error: ZAP alerts directory not found: %s\n' "$ZAP_ALERTS" >&2
+    exit 1
+  fi
+}
+
+host_os() {
+  case "$(uname -s)" in
+    Linux) printf 'linux\n' ;;
+    Darwin) printf 'darwin\n' ;;
+    *)
+      printf 'error: unsupported OS for scannerctl download: %s\n' "$(uname -s)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+host_arch_pattern() {
+  case "$(uname -m)" in
+    x86_64 | amd64) printf 'x86_64|amd64\n' ;;
+    aarch64 | arm64) printf 'aarch64|arm64\n' ;;
+    *)
+      printf 'error: unsupported architecture for scannerctl download: %s\n' "$(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+select_scannerctl_asset() {
+  local release_json="$1"
+  local os arch
+
+  os="$(host_os)"
+  arch="$(host_arch_pattern)"
+
+  python3 - "$release_json" "$os" "$arch" <<'PY'
+import json
+import re
+import sys
+
+release_json, os_token, arch_pattern = sys.argv[1:]
+with open(release_json, encoding="utf-8") as handle:
+    release = json.load(handle)
+
+assets = release.get("assets", [])
+asset_by_name = {
+    asset.get("name", ""): asset.get("browser_download_url", "")
+    for asset in assets
+}
+matches = []
+for asset in assets:
+    name = asset.get("name", "")
+    url = asset.get("browser_download_url", "")
+    lowered = name.lower()
+    if "scannerctl" not in lowered:
+        continue
+    if lowered.endswith((".asc", ".sig", ".sha256", ".sha512", ".sha256sum", ".sha512sum")):
+        continue
+    if os_token not in lowered:
+        continue
+    if not re.search(arch_pattern, lowered):
+        continue
+    checksum_names = [
+        f"{name}.sha256",
+        f"{name}.sha256sum",
+        f"{name}.sha256.txt",
+        f"{name}.sha256sum.txt",
+    ]
+    checksum = next(
+        ((checksum_name, asset_by_name[checksum_name]) for checksum_name in checksum_names if checksum_name in asset_by_name),
+        None,
+    )
+    if checksum is None:
+        continue
+    matches.append((name, url, checksum[0], checksum[1]))
+
+if not matches:
+    print(
+        "error: no scannerctl release asset with a sha256 checksum matched this host. Available assets:",
+        file=sys.stderr,
+    )
+    for asset in assets:
+        print(f"  - {asset.get('name', '<unnamed>')}", file=sys.stderr)
+    sys.exit(1)
+
+name, url, checksum_name, checksum_url = sorted(matches)[0]
+print(f"{url}\t{name}\t{checksum_url}\t{checksum_name}")
+PY
+}
+
+verify_asset_checksum() {
+  local asset_path="$1"
+  local checksum_path="$2"
+  local checksum_name="$3"
+
+  python3 - "$asset_path" "$checksum_path" "$checksum_name" <<'PY'
+import hashlib
+import re
+import sys
+
+asset_path, checksum_path, checksum_name = sys.argv[1:]
+with open(checksum_path, encoding="utf-8") as handle:
+    checksum_text = handle.read()
+
+match = re.search(r"\b([a-fA-F0-9]{64})\b", checksum_text)
+if match is None:
+    print(f"error: no SHA-256 digest found in {checksum_name}", file=sys.stderr)
+    sys.exit(1)
+
+expected = match.group(1).lower()
+sha256 = hashlib.sha256()
+with open(asset_path, "rb") as handle:
+    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        sha256.update(chunk)
+actual = sha256.hexdigest()
+
+if actual != expected:
+    print(
+        f"error: scannerctl checksum mismatch: expected {expected}, got {actual}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+PY
+}
+
+install_scannerctl_from_asset() {
+  local asset_path="$1"
+  local asset_name="$2"
+  local unpack_dir="$3"
+  local scannerctl_path
+
+  mkdir -p "$unpack_dir"
+
+  case "$asset_name" in
+    *.tar.gz | *.tgz)
+      tar -xzf "$asset_path" -C "$unpack_dir"
+      ;;
+    *.zip)
+      require_command unzip
+      unzip -q "$asset_path" -d "$unpack_dir"
+      ;;
+    *)
+      cp "$asset_path" "$unpack_dir/scannerctl"
+      ;;
+  esac
+
+  scannerctl_path="$(find "$unpack_dir" -type f -name scannerctl -print -quit)"
+  if [[ -z "$scannerctl_path" ]]; then
+    scannerctl_path="$(
+      find "$unpack_dir" -type f -name '*scannerctl*' \
+        ! -name '*.asc' \
+        ! -name '*.sig' \
+        ! -name '*.sha256' \
+        ! -name '*.sha512' \
+        ! -name '*.sha256sum' \
+        ! -name '*.sha512sum' \
+        -print -quit
+    )"
+  fi
+  if [[ -z "$scannerctl_path" ]]; then
+    printf 'error: scannerctl binary not found in release asset %s\n' "$asset_name" >&2
+    exit 1
+  fi
+
+  cp "$scannerctl_path" "$SCANNERCTL"
+  chmod +x "$SCANNERCTL"
+}
+
+download_scannerctl() {
+  local release_json asset_info asset_url asset_name checksum_url checksum_name asset_path checksum_path unpack_dir
+
+  if [[ -x "$SCANNERCTL" ]]; then
+    log "using existing scannerctl at $SCANNERCTL"
+    return
+  fi
+
+  require_command curl
+  require_command python3
+
+  release_json="$(mktemp)"
+  asset_path="$(mktemp)"
+  checksum_path="$(mktemp)"
+  unpack_dir="$(mktemp -d)"
+  log "resolving latest openvas-scanner release"
+  curl -fsSL "$OPENVAS_RELEASE_API" -o "$release_json"
+
+  asset_info="$(select_scannerctl_asset "$release_json")"
+  IFS=$'\t' read -r asset_url asset_name checksum_url checksum_name <<<"$asset_info"
+
+  log "downloading $asset_name to $SCANNERCTL"
+  curl -fL "$asset_url" -o "$asset_path"
+  curl -fL "$checksum_url" -o "$checksum_path"
+  verify_asset_checksum "$asset_path" "$checksum_path" "$checksum_name"
+  install_scannerctl_from_asset "$asset_path" "$asset_name" "$unpack_dir"
+  rm -f "$release_json" "$asset_path" "$checksum_path"
+  rm -rf "$unpack_dir"
+}
+
+generate_feed() {
+  log "generating feed into $FEED_DIR"
+  rm -rf "$FEED_DIR"
+  mkdir -p "$FEED_DIR"
+
+  cargo run --manifest-path "$ROOT/Cargo.toml" --bin greenbone-was-vtgen -- \
+    --input "$ZAP_ALERTS" \
+    --output "$FEED_DIR"
+}
+
+check_nasl_files() {
+  local failed=0
+
+  mapfile -d '' nasl_files < <(find "$FEED_DIR" -type f -name '*.nasl' -print0 | sort -z)
+  if [[ "${#nasl_files[@]}" -eq 0 ]]; then
+    printf 'error: no NASL files generated in %s\n' "$FEED_DIR" >&2
+    exit 1
+  fi
+
+  log "checking ${#nasl_files[@]} NASL files with scannerctl"
+  for nasl_file in "${nasl_files[@]}"; do
+    if ! "$SCANNERCTL" syntax --quiet "$nasl_file"; then
+      printf 'invalid NASL: %s\n' "$nasl_file" >&2
+      failed=1
+    fi
+  done
+
+  if [[ "$failed" -ne 0 ]]; then
+    printf 'error: one or more NASL files are invalid\n' >&2
+    exit 1
+  fi
+}
+
+require_command git
+require_command cargo
+require_command find
+require_command sort
+
+clone_zap_repository
+download_scannerctl
+generate_feed
+check_nasl_files
+
+log "feed generated and validated successfully"
