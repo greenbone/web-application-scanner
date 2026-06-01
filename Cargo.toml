@@ -9,6 +9,10 @@ publish = false
 name = "greenbone-was"
 path = "src/main.rs"
 
+[[bin]]
+name = "greenbone-was-vtgen"
+path = "src/bin/greenbone-was-vtgen.rs"
+
 [dependencies]
 async-trait = "0.1"
 axum = "0.8.9"
@@ -16,6 +20,7 @@ config = "0.15.23"
 dotenvy = "0.15.7"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_yaml = "0.9"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio"] }
 thiserror = "2.0.18"

@@ -41,7 +41,10 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(api::scans::delete_scan),
         )
         .route("/scans/{id}/results", get(api::scans::get_scan_results))
-        .route("/scans/{id}/results/{rid}", get(api::scans::get_scan_result))
+        .route(
+            "/scans/{id}/results/{rid}",
+            get(api::scans::get_scan_result),
+        )
         .route("/scans/{id}/status", get(api::scans::get_scan_status));
 
     Router::new()

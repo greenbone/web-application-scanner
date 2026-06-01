@@ -4,6 +4,7 @@
 
 use super::{ZapClient, ZapClientError};
 use serde::Deserialize;
+use serde_json::Value;
 
 /// Response payload returned by the ZAP `ascan/scan` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -18,7 +19,7 @@ struct AscanScanResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 struct AscanStatusResponse {
     /// The current status of the active scan, represented as a percentage (0-100).
-    status: String,
+    status: Value,
 }
 
 impl ZapClient {
@@ -75,14 +76,31 @@ impl ZapClient {
 
         let parsed_response = serde_json::from_str::<AscanStatusResponse>(&body)?;
 
-        let progress_int = parsed_response.status.parse::<i32>();
-        if progress_int.is_err() {
-            return Err(ZapClientError::UnexpectedContent {
+        parse_status_value(parsed_response.status)
+    }
+}
+
+fn parse_status_value(value: Value) -> Result<i32, ZapClientError> {
+    match value {
+        Value::Number(number) => number
+            .as_i64()
+            .and_then(|number| i32::try_from(number).ok())
+            .ok_or_else(|| ZapClientError::UnexpectedContent {
                 field: "status".to_string(),
-                content: parsed_response.status,
-            });
+                content: number.to_string(),
+            }),
+        Value::String(status) => {
+            status
+                .parse::<i32>()
+                .map_err(|_| ZapClientError::UnexpectedContent {
+                    field: "status".to_string(),
+                    content: status,
+                })
         }
-        Ok(progress_int.unwrap())
+        other => Err(ZapClientError::UnexpectedContent {
+            field: "status".to_string(),
+            content: other.to_string(),
+        }),
     }
 }
 
