@@ -16,6 +16,7 @@ pub struct NaslMetadata {
     pub copyright_year: String,
     pub cvss_base: Option<String>,
     pub cvss_base_vector: Option<String>,
+    pub severity_origin: Option<String>,
     pub xrefs: BTreeSet<Xref>,
     pub cves: BTreeSet<String>,
     pub tags: Vec<Tag>,
@@ -79,10 +80,16 @@ pub fn render(metadata: &NaslMetadata) -> String {
     );
     output.push('\n');
 
-    if let (Some(base), Some(vector)) = (&metadata.cvss_base, &metadata.cvss_base_vector) {
+    if let Some(base) = &metadata.cvss_base {
         line_tag(&mut output, "cvss_base", base);
+    }
+    if let Some(vector) = &metadata.cvss_base_vector {
         line_tag(&mut output, "cvss_base_vector", vector);
-        line_tag(&mut output, "severity_origin", "Greenbone");
+    }
+    if (metadata.cvss_base.is_some() || metadata.cvss_base_vector.is_some())
+        && let Some(origin) = &metadata.severity_origin
+    {
+        line_tag(&mut output, "severity_origin", origin);
     }
     line_tag(&mut output, "qod_type", "remote_analysis");
     output.push('\n');
@@ -107,16 +114,6 @@ pub fn render(metadata: &NaslMetadata) -> String {
     output.push_str("  exit(0);\n");
     output.push_str("}\n");
     output
-}
-
-pub fn severity_from_risk(risk: &str) -> Option<(&'static str, &'static str)> {
-    match risk.trim().to_ascii_lowercase().as_str() {
-        "info" | "informational" => Some(("0.0", "AV:N/AC:L/Au:N/C:N/I:N/A:N")),
-        "low" => Some(("3.5", "AV:N/AC:H/Au:N/C:P/I:N/A:N")),
-        "medium" => Some(("6.4", "AV:N/AC:L/Au:N/C:P/I:P/A:N")),
-        "high" => Some(("7.5", "AV:N/AC:L/Au:N/C:P/I:P/A:P")),
-        _ => None,
-    }
 }
 
 pub fn solution_type(status: Option<&str>, solution: Option<&str>) -> Option<&'static str> {

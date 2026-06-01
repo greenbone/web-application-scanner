@@ -85,6 +85,9 @@ pub struct AlertDoc {
     pub alert_type: Option<String>,
     pub status: Option<String>,
     pub risk: Option<String>,
+    pub cvss_base: Option<String>,
+    pub cvss_base_vector: Option<String>,
+    pub severity_origin: Option<String>,
     pub solution: Option<String>,
     pub references: Vec<String>,
     pub other: Option<String>,
@@ -112,6 +115,11 @@ struct Frontmatter {
     alerttype: Option<String>,
     status: Option<String>,
     risk: Option<String>,
+    #[serde(alias = "cvssbase")]
+    cvss_base: Option<Value>,
+    #[serde(alias = "cvssbasevector")]
+    cvss_base_vector: Option<String>,
+    severity_origin: Option<String>,
     solution: Option<String>,
     references: Option<Value>,
     other: Option<String>,
@@ -170,6 +178,9 @@ pub fn parse_alert_doc(path: &Path, content: &str) -> Result<Option<AlertDoc>, S
         alert_type: opt_empty_to_none(raw.alerttype),
         status: opt_empty_to_none(raw.status),
         risk: opt_empty_to_none(raw.risk),
+        cvss_base: value_to_string(raw.cvss_base.as_ref()).and_then(empty_to_none),
+        cvss_base_vector: opt_empty_to_none(raw.cvss_base_vector),
+        severity_origin: opt_empty_to_none(raw.severity_origin),
         solution: opt_empty_to_none(raw.solution),
         references: value_to_strings(raw.references.as_ref(), "references")?,
         other: opt_empty_to_none(raw.other),
@@ -287,6 +298,9 @@ alerttype: "Passive"
 status: release
 type: alert
 risk: Medium
+cvss_base: "5.0"
+cvss_base_vector: "AV:N/AC:L/Au:N/C:P/I:N/A:N"
+severity_origin: ZAP
 solution: "Set a header."
 references:
   - https://example.com/ref
@@ -303,6 +317,12 @@ Body text.
 
         assert_eq!(doc.alert_id.to_string(), "10020-1");
         assert_eq!(doc.kind, AlertKind::Alert);
+        assert_eq!(doc.cvss_base.as_deref(), Some("5.0"));
+        assert_eq!(
+            doc.cvss_base_vector.as_deref(),
+            Some("AV:N/AC:L/Au:N/C:P/I:N/A:N")
+        );
+        assert_eq!(doc.severity_origin.as_deref(), Some("ZAP"));
         assert_eq!(doc.references, ["https://example.com/ref"]);
         assert_eq!(doc.body, "Body text.");
     }
