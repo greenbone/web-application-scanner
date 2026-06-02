@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::Deserialize;
 use super::{ZapClient, ZapClientError};
+use serde::Deserialize;
 
 /// Response payload returned by the ZAP `ascan/scan` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -23,7 +23,13 @@ struct AscanStatusResponse {
 
 impl ZapClient {
     /// Start an active scan for the specified context and target URL.
-    pub async fn start_active_scan(&self, context_id: &str, url: &str, recurse: bool, in_scope_only: bool, ) -> Result<String, ZapClientError> {
+    pub async fn start_active_scan(
+        &self,
+        context_id: &str,
+        url: &str,
+        recurse: bool,
+        in_scope_only: bool,
+    ) -> Result<String, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/ascan/action/scan");
         let response = self
             .http_client
@@ -56,10 +62,7 @@ impl ZapClient {
         let response = self
             .http_client
             .get(endpoint)
-            .query(&[
-                ("apikey", self.api_key.as_str()),
-                ("scanId", scan_id),
-            ])
+            .query(&[("apikey", self.api_key.as_str()), ("scanId", scan_id)])
             .send()
             .await?;
 

@@ -22,15 +22,12 @@ use std::sync::Arc;
 use crate::{
     app::{AppState, error::AppError},
     config::settings::{Settings, StorageBackend},
-    storage::{
-        in_memory::InMemoryStorage,
-        sqlite::SqliteStorage,
-    },
+    storage::{in_memory::InMemoryStorage, sqlite::SqliteStorage},
 };
 
 use tracing::info;
 
-/// Initialize and run the web application scanner service. 
+/// Initialize and run the web application scanner service.
 pub async fn run() -> Result<(), AppError> {
     let settings = Settings::load()?;
     logging::init_logging(&settings);

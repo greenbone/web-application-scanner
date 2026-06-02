@@ -29,7 +29,10 @@ pub fn build_router(state: AppState) -> Router {
 
     // TODO: Add authentication middleware to private routes
     let private_routes = Router::new()
-        .route("/scans", head(api::scans::head_scans).post(api::scans::create_scan))
+        .route(
+            "/scans",
+            head(api::scans::head_scans).post(api::scans::create_scan),
+        )
         .route("/scans/preferences", get(api::scans::get_scan_preferences))
         .route(
             "/scans/:id",

@@ -120,11 +120,8 @@ pub trait ScanStorage: Send + Sync {
     async fn add_result(&self, scan_id: &str, result: ResultRecord) -> Result<(), StorageError>;
 
     /// Retrieve a single result by its 0-based index within the scan.
-    async fn get_result(
-        &self,
-        scan_id: &str,
-        result_id: i64,
-    ) -> Result<ResultRecord, StorageError>;
+    async fn get_result(&self, scan_id: &str, result_id: i64)
+    -> Result<ResultRecord, StorageError>;
 
     /// Retrieve results for a scan within an optional index range.
     ///

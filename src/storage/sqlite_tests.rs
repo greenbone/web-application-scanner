@@ -71,7 +71,9 @@ async fn get_missing_scan_returns_not_found() {
 async fn update_and_read_status() {
     let s = make_storage().await;
     s.create_scan(make_scan("st")).await.unwrap();
-    s.update_scan_status("st", ScanStatus::Running).await.unwrap();
+    s.update_scan_status("st", ScanStatus::Running)
+        .await
+        .unwrap();
     let scan = s.get_scan("st").await.unwrap();
     assert_eq!(scan.status, ScanStatus::Running);
 }

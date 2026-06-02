@@ -83,7 +83,11 @@ impl ScanStorage for InMemoryStorage {
         Ok(())
     }
 
-    async fn add_result(&self, scan_id: &str, mut result: ResultRecord) -> Result<(), StorageError> {
+    async fn add_result(
+        &self,
+        scan_id: &str,
+        mut result: ResultRecord,
+    ) -> Result<(), StorageError> {
         let mut state = self.state.write().await;
         if !state.scans.contains_key(scan_id) {
             return Err(StorageError::NotFound(scan_id.to_string()));
@@ -95,7 +99,11 @@ impl ScanStorage for InMemoryStorage {
         Ok(())
     }
 
-    async fn get_result(&self, scan_id: &str, result_id: i64) -> Result<ResultRecord, StorageError> {
+    async fn get_result(
+        &self,
+        scan_id: &str,
+        result_id: i64,
+    ) -> Result<ResultRecord, StorageError> {
         let state = self.state.read().await;
         let results = state
             .results

@@ -135,9 +135,7 @@ fn vts_from_db(s: &str) -> Result<Vec<Vt>, StorageError> {
 }
 
 fn detail_to_db(detail: &Option<serde_json::Value>) -> Option<String> {
-    detail
-        .as_ref()
-        .and_then(|v| serde_json::to_string(v).ok())
+    detail.as_ref().and_then(|v| serde_json::to_string(v).ok())
 }
 
 fn detail_from_db(s: Option<&str>) -> Option<serde_json::Value> {
@@ -262,7 +260,11 @@ impl ScanStorage for SqliteStorage {
         Ok(())
     }
 
-    async fn get_result(&self, scan_id: &str, result_id: i64) -> Result<ResultRecord, StorageError> {
+    async fn get_result(
+        &self,
+        scan_id: &str,
+        result_id: i64,
+    ) -> Result<ResultRecord, StorageError> {
         let row = sqlx::query(
             "SELECT id, scan_id, result_type, ip_address, hostname, oid, port, protocol, message, detail
              FROM scan_results WHERE scan_id = ? AND id = ?",

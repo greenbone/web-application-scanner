@@ -4,8 +4,8 @@
 
 //! ZAP Context API endpoint client.
 
-use serde::Deserialize;
 use super::{ZapClient, ZapClientError};
+use serde::Deserialize;
 
 /// Response payload returned by the ZAP `contextList` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -105,19 +105,29 @@ impl ZapClient {
         if parsed_response.result.to_lowercase() == "ok" {
             Ok(())
         } else {
-            Err(ZapClientError::UnexpectedContent { field: "Result".to_string(), content: parsed_response.result })
+            Err(ZapClientError::UnexpectedContent {
+                field: "Result".to_string(),
+                content: parsed_response.result,
+            })
         }
-
     }
 
     /// Include a URL in the context with the given name.
     /// Returns `Ok(())` on success, or an error if the URL could not be included.
-    pub async fn include_in_context(&self, context_name: &str, regex: &str) -> Result<(), ZapClientError> {
+    pub async fn include_in_context(
+        &self,
+        context_name: &str,
+        regex: &str,
+    ) -> Result<(), ZapClientError> {
         let endpoint = self.endpoint_url("JSON/context/action/includeInContext");
         let response = self
             .http_client
             .post(endpoint)
-            .form(&[("apikey", self.api_key.as_str()), ("contextName", context_name), ("regex", regex)])
+            .form(&[
+                ("apikey", self.api_key.as_str()),
+                ("contextName", context_name),
+                ("regex", regex),
+            ])
             .send()
             .await?;
 
@@ -133,7 +143,10 @@ impl ZapClient {
         if parsed_response.result.to_lowercase() == "ok" {
             Ok(())
         } else {
-            Err(ZapClientError::UnexpectedContent { field: "Result".to_string(), content: parsed_response.result })
+            Err(ZapClientError::UnexpectedContent {
+                field: "Result".to_string(),
+                content: parsed_response.result,
+            })
         }
     }
 }

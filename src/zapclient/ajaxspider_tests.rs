@@ -4,9 +4,7 @@
 
 use reqwest::StatusCode;
 use wiremock::{
-    Mock,
-    MockServer,
-    ResponseTemplate,
+    Mock, MockServer, ResponseTemplate,
     matchers::{body_string_contains, method, path},
 };
 
@@ -20,7 +18,7 @@ async fn start_ajax_spider_scan_posts_to_zap_ajax_scan_endpoint() {
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .and(body_string_contains("url=https%3A%2F%2Fexample.com"))
         .and(body_string_contains("inScope=true"))
         .and(body_string_contains("contextName=Default+Context"))
@@ -30,8 +28,8 @@ async fn start_ajax_spider_scan_posts_to_zap_ajax_scan_endpoint() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     client
         .start_ajax_spider_scan("Default Context", "https://example.com", true, false)
@@ -50,8 +48,8 @@ async fn start_ajax_spider_scan_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .start_ajax_spider_scan("Default Context", "https://example.com", false, true)
@@ -78,8 +76,8 @@ async fn start_ajax_spider_scan_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .start_ajax_spider_scan("Default Context", "https://example.com", true, true)
@@ -103,8 +101,8 @@ async fn start_ajax_spider_scan_returns_unexpected_content_when_result_is_not_ok
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .start_ajax_spider_scan("Default Context", "https://example.com", true, false)
@@ -126,14 +124,14 @@ async fn get_ajax_spider_status_posts_to_zap_ajax_status_endpoint() {
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/view/status"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"100\"}"))
         .expect(1)
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let status = client
         .get_ajax_spider_status()
@@ -154,8 +152,8 @@ async fn get_ajax_spider_status_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .get_ajax_spider_status()
@@ -182,8 +180,8 @@ async fn get_ajax_spider_status_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .get_ajax_spider_status()

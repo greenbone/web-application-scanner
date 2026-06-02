@@ -115,8 +115,7 @@ impl Settings {
 
         if storage_backend == StorageBackend::Sqlite && sqlite_url.is_none() {
             return Err(ConfigError::Message(
-                "GREENBONE_WAS_SQLITE_URL is required when storage backend is 'sqlite'"
-                    .to_string(),
+                "GREENBONE_WAS_SQLITE_URL is required when storage backend is 'sqlite'".to_string(),
             ));
         }
 
