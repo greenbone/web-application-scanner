@@ -1,0 +1,174 @@
+name: build
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-fmt
+      - run: cargo fmt --all -- --check
+
+  check:
+    name: compile check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-check
+      - run: cargo check --locked --all-targets
+
+  build:
+    name: binary build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-build
+      - run: cargo build --locked --bin greenbone-was
+
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-test
+      - run: cargo test --locked --all-targets
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-clippy
+      - run: cargo clippy --locked --all-targets -- -D warnings
+
+  doc:
+    name: documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-doc
+      - run: cargo doc --locked --no-deps
+
+  openapi:
+    name: openapi validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx --yes @redocly/cli@1.25.15 lint --config .redocly.yaml doc/openapi-reference.yml
+
+  smoke:
+    name: binary smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-smoke
+      - run: cargo build --locked --bin greenbone-was
+      - name: Start service and check readiness
+        env:
+          GREENBONE_WAS_PORT: "8030"
+          GREENBONE_WAS_STORAGE_BACKEND: inmemory
+          GREENBONE_WAS_LOG_LEVEL: info
+        run: |
+          set -euo pipefail
+
+          ./target/debug/greenbone-was > smoke.log 2>&1 &
+          service_pid=$!
+
+          cleanup() {
+            if kill -0 "${service_pid}" 2>/dev/null; then
+              kill "${service_pid}" 2>/dev/null || true
+              wait "${service_pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8030/api/v1/health/ready >/dev/null; then
+              exit 0
+            fi
+
+            if ! kill -0 "${service_pid}" 2>/dev/null; then
+              cat smoke.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          cat smoke.log
+          exit 1
+
+  coverage:
+    name: coverage report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: stable-coverage
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov@0.6.16
+      - name: Generate coverage report
+        run: |
+          cargo llvm-cov --locked --all-targets --branch \
+            --html --output-dir target/coverage/html
+          cargo llvm-cov report --locked --branch \
+            --lcov --output-path target/coverage/lcov.info
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            target/coverage/html
+            target/coverage/lcov.info
+          if-no-files-found: error
