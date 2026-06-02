@@ -1,0 +1,33 @@
+[package]
+name = "greenbone-was"
+version = "0.1.0"
+edition = "2024"
+description = "Greenbone web application scanner"
+publish = false
+
+[[bin]]
+name = "greenbone-was"
+path = "src/main.rs"
+
+[dependencies]
+async-trait = "0.1"
+axum = "0.7.9"
+config = "0.15.23"
+dotenvy = "0.15.7"
+json = "0.12.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio"] }
+thiserror = "2.0.18"
+tokio = { version = "1.52.3", features = ["full"] }
+tower-http = { version = "0.6.11", features = ["trace"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["default", "env-filter", "fmt", "json"] }
+utoipa = { version = "5", features = ["axum_extras"] }
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+serial_test = "3.4.0"
+wiremock = "0.6"
