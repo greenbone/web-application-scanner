@@ -111,10 +111,7 @@ pub async fn get_scan_preferences() -> Json<PreferencesResponse> {
 ///
 /// Returns the target, scan preferences, and VTs for the requested scan.
 /// Returns 404 if the scan does not exist.
-pub async fn get_scan(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> impl IntoResponse {
+pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     match state.storage.get_scan(&id).await {
         Ok(scan) => Json(ScanDetailResponse {
             scan_id: scan.id,
@@ -199,8 +196,9 @@ pub async fn get_scan_results(
     };
 
     match state.storage.get_results(&id, start, end).await {
-        Ok(results) => Json(results.into_iter().map(result_response).collect::<Vec<_>>())
-            .into_response(),
+        Ok(results) => {
+            Json(results.into_iter().map(result_response).collect::<Vec<_>>()).into_response()
+        }
         Err(e) => storage_err(e),
     }
 }

@@ -4,9 +4,7 @@
 
 use reqwest::StatusCode;
 use wiremock::{
-    Mock,
-    MockServer,
-    ResponseTemplate,
+    Mock, MockServer, ResponseTemplate,
     matchers::{body_string_contains, method, path},
 };
 
@@ -19,7 +17,7 @@ async fn context_list_posts_to_zap_context_list_endpoint() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/JSON/context/view/contextList"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .respond_with(
             ResponseTemplate::new(200)
                 .set_body_string("{\"contextList\":[\"Default Context\",\"Test\"]}"),
@@ -28,8 +26,8 @@ async fn context_list_posts_to_zap_context_list_endpoint() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let response = client
         .get_context_list()
@@ -52,8 +50,8 @@ async fn context_list_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .get_context_list()
@@ -79,8 +77,8 @@ async fn context_list_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .get_context_list()
@@ -100,15 +98,15 @@ async fn new_context_posts_to_zap_new_context_endpoint() {
 
     Mock::given(method("POST"))
         .and(path("/JSON/context/action/newContext"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .and(body_string_contains("contextName=My+Context"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"contextId\":\"7\"}"))
         .expect(1)
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let context_id = client
         .new_context(context_name)
@@ -128,8 +126,8 @@ async fn new_context_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .new_context("My Context")
@@ -155,8 +153,8 @@ async fn new_context_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .new_context("My Context")
@@ -176,15 +174,15 @@ async fn remove_context_posts_to_zap_remove_context_endpoint() {
 
     Mock::given(method("POST"))
         .and(path("/JSON/context/action/removeContext"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .and(body_string_contains("contextName=My+Context"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"OK\"}"))
         .expect(1)
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     client
         .remove_context(context_name)
@@ -202,8 +200,8 @@ async fn remove_context_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .remove_context("My Context")
@@ -229,8 +227,8 @@ async fn remove_context_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .remove_context("My Context")
@@ -253,8 +251,8 @@ async fn remove_context_returns_unexpected_content_when_result_is_not_ok() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .remove_context("My Context")
@@ -278,7 +276,7 @@ async fn include_in_context_posts_to_zap_include_in_context_endpoint() {
 
     Mock::given(method("POST"))
         .and(path("/JSON/context/action/includeInContext"))
-        .and(body_string_contains(&format!("apikey={API_KEY}")))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
         .and(body_string_contains("contextName=My+Context"))
         .and(body_string_contains("regex="))
         .and(body_string_contains("example.com"))
@@ -287,8 +285,8 @@ async fn include_in_context_posts_to_zap_include_in_context_endpoint() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     client
         .include_in_context(context_name, regex)
@@ -306,8 +304,8 @@ async fn include_in_context_returns_unexpected_status_on_http_error() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .include_in_context("My Context", "https://example.com/.*")
@@ -333,8 +331,8 @@ async fn include_in_context_returns_parse_error_for_invalid_schema() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .include_in_context("My Context", "https://example.com/.*")
@@ -357,8 +355,8 @@ async fn include_in_context_returns_unexpected_content_when_result_is_not_ok() {
         .mount(&server)
         .await;
 
-    let client = ZapClient::new(server.uri(), API_KEY.to_string())
-        .expect("client should be constructed");
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
         .include_in_context("My Context", "https://example.com/.*")

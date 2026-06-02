@@ -161,9 +161,9 @@ jobs:
           tool: cargo-llvm-cov@0.6.16
       - name: Generate coverage report
         run: |
-          cargo llvm-cov --locked --all-targets --branch \
+          cargo llvm-cov --locked --all-targets \
             --html --output-dir target/coverage/html
-          cargo llvm-cov report --locked --branch \
+          cargo llvm-cov report --locked \
             --lcov --output-path target/coverage/lcov.info
       - uses: actions/upload-artifact@v4
         with:

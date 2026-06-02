@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::Deserialize;
 use super::{ZapClient, ZapClientError};
+use serde::Deserialize;
 
 /// Response payload returned by the ZAP `ajaxSpider/Scan` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -22,7 +22,13 @@ struct AjaxSpiderStatusResponse {
 
 impl ZapClient {
     /// Start an AJAX Spider scan for the specified context, target URL and options.
-    pub async fn start_ajax_spider_scan(&self, context_name: &str, url: &str, in_scope: bool, subtree_only: bool) -> Result<(), ZapClientError> {
+    pub async fn start_ajax_spider_scan(
+        &self,
+        context_name: &str,
+        url: &str,
+        in_scope: bool,
+        subtree_only: bool,
+    ) -> Result<(), ZapClientError> {
         let endpoint = self.endpoint_url("JSON/ajaxSpider/action/scan");
         let response = self
             .http_client
