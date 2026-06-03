@@ -2,8 +2,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use serde::Deserialize;
 use super::{ZapClient, ZapClientError};
+use serde::Deserialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub enum AlertRiskLevel {
@@ -43,7 +43,11 @@ struct AlertsResponse {
 
 impl ZapClient {
     /// Get the list of alerts for the specified context and URL.
-    pub async fn get_alerts(&self, context_id: &str, url: &str) -> Result<Vec<Alert>, ZapClientError> {
+    pub async fn get_alerts(
+        &self,
+        context_id: &str,
+        url: &str,
+    ) -> Result<Vec<Alert>, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/alert/view/alerts");
         let response = self
             .http_client
@@ -68,3 +72,7 @@ impl ZapClient {
         Ok(parsed_response.alerts)
     }
 }
+
+#[cfg(test)]
+#[path = "alerts_tests.rs"]
+mod alerts_tests;
