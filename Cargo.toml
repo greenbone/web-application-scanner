@@ -26,5 +26,5 @@ tracing-subscriber = { version = "0.3.23", features = ["default", "env-filter", 
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
-serial_test = "3.4.0"
+serial_test = "3.5.0"
 wiremock = "0.6"
