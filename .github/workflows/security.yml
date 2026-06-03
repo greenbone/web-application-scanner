@@ -24,13 +24,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-cargo-deny
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny@0.19.6
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-cargo-deny-${{ hashFiles('Cargo.lock') }}
+      - name: Install cargo-deny
+        run: cargo install --locked --version 0.19.6 cargo-deny
       - run: cargo-deny --locked check
 
   unused-dependencies:
@@ -38,13 +42,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-cargo-machete
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-machete@0.7.0
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-cargo-machete-${{ hashFiles('Cargo.lock') }}
+      - name: Install cargo-machete
+        run: cargo install --locked --version 0.7.0 cargo-machete
       - name: Check unused dependencies
         run: |
           cargo metadata --locked --format-version 1 --no-deps >/dev/null
@@ -59,7 +67,8 @@ jobs:
       security-events: write
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        run: rustup default stable
       - uses: github/codeql-action/init@v4
         with:
           languages: rust

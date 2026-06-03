@@ -55,6 +55,28 @@ Recommended workflow defaults:
   a minimum threshold.
 - Enforce `Cargo.lock` with `--locked` on every Cargo command.
 
+## GitHub Actions Policy
+
+The workflow must comply with the repository action allowlist:
+
+- GitHub-owned actions are allowed, for example `actions/checkout`,
+  `actions/cache`, `actions/setup-node`, `actions/upload-artifact`, and
+  `github/codeql-action`.
+- Third-party actions are allowed only when they match the enterprise allowlist
+  reported by GitHub policy, for example `codecov/codecov-action@v5`,
+  `anchore/scan-action@*`, or the other explicitly listed patterns.
+- Do not use unlisted third-party actions such as `dtolnay/rust-toolchain`,
+  `Swatinem/rust-cache`, or `taiki-e/install-action`.
+
+For this pipeline, prefer GitHub-owned actions plus shell commands:
+
+- Install and configure Rust with `rustup`, including required components such
+  as `rustfmt`, `clippy`, and `llvm-tools-preview`.
+- Cache Cargo registry, Git dependencies, and build output with
+  `actions/cache`.
+- Install Rust CI helper binaries with pinned `cargo install --locked --version`
+  commands instead of third-party installer actions.
+
 ## Build Jobs
 
 ### Format
