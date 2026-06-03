@@ -41,7 +41,10 @@ pub fn build_router(state: AppState) -> Router {
                 .delete(api::scans::delete_scan),
         )
         .route("/scans/{id}/results", get(api::scans::get_scan_results))
-        .route("/scans/{id}/results/{rid}", get(api::scans::get_scan_result))
+        .route(
+            "/scans/{id}/results/{rid}",
+            get(api::scans::get_scan_result),
+        )
         .route("/scans/{id}/status", get(api::scans::get_scan_status));
 
     Router::new()
@@ -49,4 +52,20 @@ pub fn build_router(state: AppState) -> Router {
         .nest(&API_BASE_PATH, private_routes)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::{app::AppState, storage::in_memory::InMemoryStorage};
+
+    use super::build_router;
+
+    #[test]
+    fn build_router_accepts_all_route_patterns() {
+        let state = AppState::new(Arc::new(InMemoryStorage::new()));
+
+        let _router = build_router(state);
+    }
 }
