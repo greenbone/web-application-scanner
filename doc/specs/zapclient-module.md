@@ -34,9 +34,15 @@ Validation of string values should be case-sensitive unless explicitly noted oth
 
 ### Rules for specific endpoints
 
-Accepted values for the AJAX Spider status are "Stopped" and "Running".
+AJAX Spider status values are normalized case-sensitively to "stopped" and "running".
+
+Any other AJAX Spider status value must raise an `UnexpectedContent` error.
 
 The active scan status is expected to be a percentage value (valid range `0..=100`).
+
+Active scan status values outside `0..=100` must raise an `UnexpectedContent` error.
+
+Context action endpoints (`removeContext`, `includeInContext`) require exact `"OK"` in `Result`.
 
 ## Tests
 
@@ -51,8 +57,4 @@ Tests for API endpoints use a mock HTTP server like `wiremock` to verify the fol
 
 ## Open questions and notes
 
-- Note: The spec now defines active scan status as a percentage in range `0..=100`, but `get_active_scan_status` currently validates only integer parsing and does not reject out-of-range values.
-- Note: AJAX Spider status should be normalized to documented values (`Running`/`Stopped`) at the client boundary (for example via an enum).
-- Note: String validation must be case-sensitive to remain consistent with spec rules; current case-insensitive handling of context endpoint `Result` values should be aligned.
 - ToDo: Add pagination support (`start`, `count`) to `get_alerts`.
-- Note: `src/clitest.rs` currently calls `get_alerts` with `context_name` as `contextId`, which may not match endpoint expectations and should be aligned with the chosen contract.

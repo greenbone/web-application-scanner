@@ -8,7 +8,7 @@ use wiremock::{
     matchers::{body_string_contains, method, path},
 };
 
-use super::{ZapClient, ZapClientError};
+use super::{AjaxSpiderStatus, ZapClient, ZapClientError};
 
 const API_KEY: &str = "test-api-key";
 
@@ -125,7 +125,7 @@ async fn get_ajax_spider_status_posts_to_zap_ajax_status_endpoint() {
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/view/status"))
         .and(body_string_contains(format!("apikey={API_KEY}")))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"100\"}"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"running\"}"))
         .expect(1)
         .mount(&server)
         .await;
@@ -138,7 +138,58 @@ async fn get_ajax_spider_status_posts_to_zap_ajax_status_endpoint() {
         .await
         .expect("get_ajax_spider_status should return parsed status on success");
 
-    assert_eq!(status, "100");
+    assert_eq!(status, AjaxSpiderStatus::Running);
+}
+
+#[tokio::test]
+async fn get_ajax_spider_status_accepts_lowercase_stopped() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"stopped\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let status = client
+        .get_ajax_spider_status()
+        .await
+        .expect("get_ajax_spider_status should accept lowercase status values");
+
+    assert_eq!(status, AjaxSpiderStatus::Stopped);
+}
+
+#[tokio::test]
+async fn get_ajax_spider_status_rejects_uppercase_status() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"Stopped\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .get_ajax_spider_status()
+        .await
+        .expect_err("get_ajax_spider_status should fail on non-lowercase status values");
+
+    match error {
+        ZapClientError::UnexpectedContent { field, content } => {
+            assert_eq!(field, "status");
+            assert_eq!(content, "Stopped");
+        }
+        other => panic!("expected UnexpectedContent error, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -191,5 +242,33 @@ async fn get_ajax_spider_status_returns_parse_error_for_invalid_schema() {
     match error {
         ZapClientError::ParseResponse(_) => {}
         other => panic!("expected ParseResponse error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn get_ajax_spider_status_returns_unexpected_content_for_unknown_status() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"100\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .get_ajax_spider_status()
+        .await
+        .expect_err("get_ajax_spider_status should fail on unknown status values");
+
+    match error {
+        ZapClientError::UnexpectedContent { field, content } => {
+            assert_eq!(field, "status");
+            assert_eq!(content, "100");
+        }
+        other => panic!("expected UnexpectedContent error, got {other:?}"),
     }
 }

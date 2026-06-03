@@ -269,6 +269,33 @@ async fn remove_context_returns_unexpected_content_when_result_is_not_ok() {
 }
 
 #[tokio::test]
+async fn remove_context_rejects_lowercase_ok_result() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .remove_context("My Context")
+        .await
+        .expect_err("remove_context should fail when Result is not exact 'OK'");
+
+    match error {
+        ZapClientError::UnexpectedContent { field, content } => {
+            assert_eq!(field, "Result");
+            assert_eq!(content, "ok");
+        }
+        other => panic!("expected UnexpectedContent error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn include_in_context_posts_to_zap_include_in_context_endpoint() {
     let server = MockServer::start().await;
     let context_name = "My Context";
@@ -367,6 +394,33 @@ async fn include_in_context_returns_unexpected_content_when_result_is_not_ok() {
         ZapClientError::UnexpectedContent { field, content } => {
             assert_eq!(field, "Result");
             assert_eq!(content, "FAIL");
+        }
+        other => panic!("expected UnexpectedContent error, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn include_in_context_rejects_lowercase_ok_result() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .include_in_context("My Context", "https://example.com/.*")
+        .await
+        .expect_err("include_in_context should fail when Result is not exact 'OK'");
+
+    match error {
+        ZapClientError::UnexpectedContent { field, content } => {
+            assert_eq!(field, "Result");
+            assert_eq!(content, "ok");
         }
         other => panic!("expected UnexpectedContent error, got {other:?}"),
     }

@@ -74,15 +74,22 @@ impl ZapClient {
         }
 
         let parsed_response = serde_json::from_str::<AscanStatusResponse>(&body)?;
+        let progress_int = parsed_response
+            .status
+            .parse::<i32>()
+            .map_err(|_| ZapClientError::UnexpectedContent {
+                field: "status".to_string(),
+                content: parsed_response.status.clone(),
+            })?;
 
-        let progress_int = parsed_response.status.parse::<i32>();
-        if progress_int.is_err() {
+        if !(0..=100).contains(&progress_int) {
             return Err(ZapClientError::UnexpectedContent {
                 field: "status".to_string(),
                 content: parsed_response.status,
             });
         }
-        Ok(progress_int.unwrap())
+
+        Ok(progress_int)
     }
 }
 

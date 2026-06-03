@@ -5,6 +5,13 @@
 use super::{ZapClient, ZapClientError};
 use serde::Deserialize;
 
+/// Normalized status values returned by the AJAX Spider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AjaxSpiderStatus {
+    Running,
+    Stopped,
+}
+
 /// Response payload returned by the ZAP `ajaxSpider/Scan` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 struct AjaxSpiderScanResponse {
@@ -63,7 +70,7 @@ impl ZapClient {
     }
 
     /// Get the current status of the AJAX Spider scan.
-    pub async fn get_ajax_spider_status(&self) -> Result<String, ZapClientError> {
+    pub async fn get_ajax_spider_status(&self) -> Result<AjaxSpiderStatus, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/ajaxSpider/view/status");
         let response = self
             .http_client
@@ -80,8 +87,14 @@ impl ZapClient {
         }
 
         let parsed_response = serde_json::from_str::<AjaxSpiderStatusResponse>(&body)?;
-
-        Ok(parsed_response.status)
+        match parsed_response.status.as_str() {
+            "running" => Ok(AjaxSpiderStatus::Running),
+            "stopped" => Ok(AjaxSpiderStatus::Stopped),
+            _ => Err(ZapClientError::UnexpectedContent {
+                field: "status".to_string(),
+                content: parsed_response.status,
+            }),
+        }
     }
 }
 

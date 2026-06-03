@@ -19,7 +19,7 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
     Mock::given(method("GET"))
         .and(path("/JSON/alert/view/alerts"))
         .and(query_param("apikey", API_KEY))
-        .and(query_param("contextId", "3"))
+        .and(query_param("contextName", "Default Context"))
         .and(query_param("url", "https://example.com"))
         .respond_with(
             ResponseTemplate::new(200).set_body_string(
@@ -34,7 +34,7 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let alerts = client
-        .get_alerts("3", "https://example.com")
+        .get_alerts("Default Context", "https://example.com")
         .await
         .expect("get_alerts should return parsed alerts on success");
 
@@ -67,7 +67,7 @@ async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let alerts = client
-        .get_alerts("3", "https://example.com")
+        .get_alerts("Default Context", "https://example.com")
         .await
         .expect("get_alerts should deserialize unknown risk values as Unknown");
 
@@ -90,7 +90,7 @@ async fn get_alerts_returns_unexpected_status_on_http_error() {
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
-        .get_alerts("3", "https://example.com")
+        .get_alerts("Default Context", "https://example.com")
         .await
         .expect_err("get_alerts should fail on non-success status");
 
@@ -118,7 +118,7 @@ async fn get_alerts_returns_parse_error_for_invalid_schema() {
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let error = client
-        .get_alerts("3", "https://example.com")
+        .get_alerts("Default Context", "https://example.com")
         .await
         .expect_err("get_alerts should fail when alerts key is missing");
 
