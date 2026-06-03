@@ -42,10 +42,10 @@ struct AlertsResponse {
 }
 
 impl ZapClient {
-    /// Get the list of alerts for the specified context and URL.
+    /// Get the list of alerts for the specified context name and URL.
     pub async fn get_alerts(
         &self,
-        context_id: &str,
+        context_name: &str,
         url: &str,
     ) -> Result<Vec<Alert>, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/alert/view/alerts");
@@ -54,7 +54,7 @@ impl ZapClient {
             .get(endpoint)
             .query(&[
                 ("apikey", self.api_key.as_str()),
-                ("contextId", context_id),
+                ("contextName", context_name),
                 ("url", url),
             ])
             .send()

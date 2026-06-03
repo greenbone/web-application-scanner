@@ -168,3 +168,31 @@ async fn get_active_scan_status_returns_parse_error_for_invalid_schema() {
         other => panic!("expected ParseResponse error, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn get_active_scan_status_returns_unexpected_content_for_out_of_range_status() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"101\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .get_active_scan_status("7")
+        .await
+        .expect_err("get_active_scan_status should fail when status is out of range");
+
+    match error {
+        ZapClientError::UnexpectedContent { field, content } => {
+            assert_eq!(field, "status");
+            assert_eq!(content, "101");
+        }
+        other => panic!("expected UnexpectedContent error, got {other:?}"),
+    }
+}

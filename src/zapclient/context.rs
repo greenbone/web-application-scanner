@@ -102,7 +102,7 @@ impl ZapClient {
 
         let parsed_response = serde_json::from_str::<RemoveContextResponse>(&body)?;
 
-        if parsed_response.result.to_lowercase() == "ok" {
+        if parsed_response.result == "OK" {
             Ok(())
         } else {
             Err(ZapClientError::UnexpectedContent {
@@ -140,7 +140,7 @@ impl ZapClient {
 
         let parsed_response = serde_json::from_str::<IncludeInContextResponse>(&body)?;
 
-        if parsed_response.result.to_lowercase() == "ok" {
+        if parsed_response.result == "OK" {
             Ok(())
         } else {
             Err(ZapClientError::UnexpectedContent {
