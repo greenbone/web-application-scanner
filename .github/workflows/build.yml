@@ -22,12 +22,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        run: |
+          rustup default stable
+          rustup component add rustfmt
+      - uses: actions/cache@v4
         with:
-          components: rustfmt
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: stable-fmt
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-fmt-${{ hashFiles('Cargo.lock') }}
       - run: cargo fmt --all -- --check
 
   check:
@@ -35,10 +40,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-check
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-check-${{ hashFiles('Cargo.lock') }}
       - run: cargo check --locked --all-targets
 
   build:
@@ -46,10 +56,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-build
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-build-${{ hashFiles('Cargo.lock') }}
       - run: cargo build --locked --bin greenbone-was
 
   test:
@@ -57,10 +72,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-test
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-test-${{ hashFiles('Cargo.lock') }}
       - run: cargo test --locked --all-targets
 
   clippy:
@@ -68,12 +88,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        run: |
+          rustup default stable
+          rustup component add clippy
+      - uses: actions/cache@v4
         with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: stable-clippy
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-clippy-${{ hashFiles('Cargo.lock') }}
       - run: cargo clippy --locked --all-targets -- -D warnings
 
   doc:
@@ -83,10 +108,15 @@ jobs:
       RUSTDOCFLAGS: -D warnings
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-doc
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-doc-${{ hashFiles('Cargo.lock') }}
       - run: cargo doc --locked --no-deps
 
   openapi:
@@ -104,10 +134,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Set up Rust
+        run: rustup default stable
+      - uses: actions/cache@v4
         with:
-          shared-key: stable-smoke
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-smoke-${{ hashFiles('Cargo.lock') }}
       - run: cargo build --locked --bin greenbone-was
       - name: Start service and check readiness
         env:
@@ -150,15 +185,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Set up Rust
+        run: |
+          rustup default stable
+          rustup component add llvm-tools-preview
+      - uses: actions/cache@v4
         with:
-          components: llvm-tools-preview
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: stable-coverage
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov@0.6.16
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-stable-coverage-${{ hashFiles('Cargo.lock') }}
+      - name: Install cargo-llvm-cov
+        run: cargo install --locked --version 0.6.16 cargo-llvm-cov
       - name: Generate coverage report
         run: |
           cargo llvm-cov --locked --all-targets \

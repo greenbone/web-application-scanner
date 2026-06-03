@@ -13,6 +13,35 @@ environment, no secret-scanning tool, and no OpenAPI drift generation.
 - `deny.toml`
 - Optional tool configuration files only if a selected tool needs them.
 
+## Phase 0: Action Policy Remediation
+
+Before validating the workflows, remove all third-party actions that are not in
+the repository action allowlist.
+
+Replace the currently denied actions as follows:
+
+- Replace `dtolnay/rust-toolchain@stable` with shell steps that run
+  `rustup default stable` and, when needed, `rustup component add rustfmt
+  clippy llvm-tools-preview`.
+- Replace `Swatinem/rust-cache@v2` with GitHub-owned `actions/cache@v4` entries
+  for Cargo registry, Cargo git dependencies, and `target/`.
+- Replace `taiki-e/install-action@v2` with pinned Cargo installs:
+  `cargo install --locked --version 0.6.16 cargo-llvm-cov`,
+  `cargo install --locked --version 0.19.6 cargo-deny`, and
+  `cargo install --locked --version 0.7.0 cargo-machete`.
+
+Keep the existing GitHub-owned actions:
+
+- `actions/checkout@v4`
+- `actions/setup-node@v4`
+- `actions/upload-artifact@v4`
+- `github/codeql-action/init@v4`
+- `github/codeql-action/analyze@v4`
+
+After the replacement, scan the workflows for `uses:` entries and verify that
+each one is either GitHub-owned or explicitly included in the enterprise
+allowlist reported by GitHub policy.
+
 ## Phase 1: Build Workflow
 
 Create `.github/workflows/build.yml` with these defaults:
@@ -25,12 +54,13 @@ Create `.github/workflows/build.yml` with these defaults:
 - Concurrency:
   - cancel superseded runs for the same workflow and branch or pull request
 - Toolchain:
-  - stable Rust
+  - stable Rust installed through `rustup`, not a third-party setup action
 - Cache:
   - Cargo registry
   - Cargo git dependencies
   - `target/`
   - key includes OS, stable toolchain, `Cargo.lock`, and job purpose
+  - implemented with GitHub-owned `actions/cache@v4`
 
 Add required jobs:
 
@@ -57,6 +87,8 @@ Add required jobs:
   - always stop the process
 - `coverage`
   - use Rust compiler `instrument-coverage` support
+  - install `llvm-tools-preview` with `rustup component add`
+  - install pinned `cargo-llvm-cov` with `cargo install --locked --version`
   - generate line and branch coverage
   - upload the report as a pull-request artifact
   - do not enforce a coverage threshold
@@ -69,6 +101,8 @@ Implementation notes:
 - Prefer a small shell script in the workflow for the smoke test. It should trap
   exit and terminate the background service process.
 - If the OpenAPI validator requires a package install, pin the tool version.
+- Do not introduce third-party actions unless they are explicitly allowed by the
+  enterprise policy list.
 
 ## Phase 2: Security Workflow
 
@@ -84,17 +118,18 @@ Create `.github/workflows/security.yml` with these defaults:
 - Concurrency:
   - cancel superseded pull-request runs
 - Toolchain:
-  - stable Rust
+  - stable Rust installed through `rustup`, not a third-party setup action
 - Cache:
   - same Cargo cache strategy as the build workflow
 
 Add required jobs:
 
 - `cargo-deny`
-  - install pinned `cargo-deny`
+  - install pinned `cargo-deny` with `cargo install --locked --version`
   - run `cargo deny check`
 - `unused-dependencies`
-  - install pinned `cargo-machete` or the selected equivalent
+  - install pinned `cargo-machete` or the selected equivalent with
+    `cargo install --locked --version`
   - run the unused-dependency check
   - fail on findings
 - `codeql`
