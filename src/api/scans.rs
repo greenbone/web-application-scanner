@@ -21,7 +21,7 @@ use crate::{
     storage::interface::{ResultRecord, ScanRecord, StorageError, parse_range},
 };
 
-/// Query parameters for the GET `/scans/:id/results` endpoint.
+/// Query parameters for the GET `/scans/{id}/results` endpoint.
 #[derive(Debug, Deserialize)]
 pub struct ResultRangeQuery {
     /// Optional range specification (e.g., "5" or "0-10").
@@ -107,7 +107,7 @@ pub async fn get_scan_preferences() -> Json<PreferencesResponse> {
     Json(PreferencesResponse::default())
 }
 
-/// GET /scans/:id — Retrieve scan details.
+/// GET /scans/{id} — Retrieve scan details.
 ///
 /// Returns the target, scan preferences, and VTs for the requested scan.
 /// Returns 404 if the scan does not exist.
@@ -124,7 +124,7 @@ pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> 
     }
 }
 
-/// POST /scans/:id — Perform an action on a scan (start or stop).
+/// POST /scans/{id} — Perform an action on a scan (start or stop).
 ///
 /// Enforces state transitions: Start only from Stored/Succeeded/Failed,
 /// Stop only from Requested/Running. Returns 406 if transition is invalid.
@@ -157,7 +157,7 @@ pub async fn scan_action(
     }
 }
 
-/// DELETE /scans/:id — Delete a scan and all its results.
+/// DELETE /scans/{id} — Delete a scan and all its results.
 ///
 /// Returns 406 if the scan is Running or Requested (cannot delete active scans).
 pub async fn delete_scan(
@@ -178,7 +178,7 @@ pub async fn delete_scan(
     }
 }
 
-/// GET /scans/:id/results — Retrieve scan results with optional range filtering.
+/// GET /scans/{id}/results — Retrieve scan results with optional range filtering.
 ///
 /// Query parameter `range` accepts `N` (all from N onward) or `N-M` (inclusive range).
 /// Defaults to all results if not specified.
@@ -203,9 +203,9 @@ pub async fn get_scan_results(
     }
 }
 
-/// GET /scans/:id/results/:rid — Retrieve a single scan result by index.
+/// GET /scans/{id}/results/{rid} — Retrieve a single scan result by index.
 ///
-/// The `:rid` parameter is a 0-based result index. Returns 404 if not found.
+/// The `{rid}` parameter is a 0-based result index. Returns 404 if not found.
 pub async fn get_scan_result(
     State(state): State<AppState>,
     Path((id, rid)): Path<(String, String)>,
@@ -221,7 +221,7 @@ pub async fn get_scan_result(
     }
 }
 
-/// GET /scans/:id/status — Retrieve the current status and timestamps of a scan.
+/// GET /scans/{id}/status — Retrieve the current status and timestamps of a scan.
 ///
 /// Returns the status, start time, and end time of the scan.
 pub async fn get_scan_status(
