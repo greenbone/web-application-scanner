@@ -35,14 +35,14 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/scans/preferences", get(api::scans::get_scan_preferences))
         .route(
-            "/scans/:id",
+            "/scans/{id}",
             get(api::scans::get_scan)
                 .post(api::scans::scan_action)
                 .delete(api::scans::delete_scan),
         )
-        .route("/scans/:id/results", get(api::scans::get_scan_results))
-        .route("/scans/:id/results/:rid", get(api::scans::get_scan_result))
-        .route("/scans/:id/status", get(api::scans::get_scan_status));
+        .route("/scans/{id}/results", get(api::scans::get_scan_results))
+        .route("/scans/{id}/results/{rid}", get(api::scans::get_scan_result))
+        .route("/scans/{id}/status", get(api::scans::get_scan_status));
 
     Router::new()
         .nest(&API_BASE_PATH, public_routes)

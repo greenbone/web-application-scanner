@@ -18,7 +18,7 @@ pub struct ScanRequest {
     pub vts: Vec<Vt>,
 }
 
-/// Request body for POST /scans/:id — Perform an action on a scan.
+/// Request body for POST /scans/{id} — Perform an action on a scan.
 #[derive(Debug, Deserialize)]
 pub struct ScanActionRequest {
     /// The action to perform (Start or Stop).
@@ -135,7 +135,7 @@ pub struct ScanIdResponse {
 #[derive(Debug, Serialize, Default)]
 pub struct PreferencesResponse {}
 
-/// Response body for GET /scans/:id – full scan details.
+/// Response body for GET /scans/{id} – full scan details.
 #[derive(Debug, Serialize)]
 pub struct ScanDetailResponse {
     /// The scan UUID.
@@ -148,7 +148,7 @@ pub struct ScanDetailResponse {
     pub vts: Vec<Vt>,
 }
 
-/// Response body for GET /scans/:id/status – scan lifecycle and timing.
+/// Response body for GET /scans/{id}/status – scan lifecycle and timing.
 #[derive(Debug, Serialize)]
 pub struct ScanStatusResponse {
     /// Current scan status.
@@ -161,7 +161,7 @@ pub struct ScanStatusResponse {
     pub end_time: Option<i64>,
 }
 
-/// Response body for GET /scans/:id/results/:rid – a single scan result.
+/// Response body for GET /scans/{id}/results/{rid} – a single scan result.
 ///
 /// Individual result record with optional fields omitted from JSON serialization.
 #[derive(Debug, Serialize)]
