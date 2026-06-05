@@ -61,8 +61,8 @@ impl ZapClient {
         let endpoint = self.endpoint_url("JSON/ascan/view/status");
         let response = self
             .http_client
-            .get(endpoint)
-            .query(&[("apikey", self.api_key.as_str()), ("scanId", scan_id)])
+            .post(endpoint)
+            .form(&[("apikey", self.api_key.as_str()), ("scanId", scan_id)])
             .send()
             .await?;
 

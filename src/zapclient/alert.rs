@@ -49,19 +49,19 @@ impl ZapClient {
         base_url: Option<&str>,
     ) -> Result<Vec<Alert>, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/alert/view/alerts");
-        let mut query = vec![
+        let mut form = vec![
             ("apikey", self.api_key.as_str()),
             ("contextName", context_name),
         ];
 
         if let Some(base_url) = base_url {
-            query.push(("baseurl", base_url));
+            form.push(("baseurl", base_url));
         }
 
         let response = self
             .http_client
-            .get(endpoint)
-            .query(&query)
+            .post(endpoint)
+            .form(&form)
             .send()
             .await?;
 
