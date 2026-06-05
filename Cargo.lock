@@ -686,6 +686,7 @@ dependencies = [
  "axum",
  "config",
  "dotenvy",
+ "regex",
  "reqwest",
  "serde",
  "serde_json",
