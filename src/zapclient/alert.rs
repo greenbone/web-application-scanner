@@ -79,5 +79,5 @@ impl ZapClient {
 }
 
 #[cfg(test)]
-#[path = "alerts_tests.rs"]
-mod alerts_tests;
+#[path = "alert_tests.rs"]
+mod alert_tests;
