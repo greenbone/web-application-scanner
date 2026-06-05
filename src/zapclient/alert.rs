@@ -69,12 +69,7 @@ impl ZapClient {
             form.push(("count".to_string(), count.to_string()));
         }
 
-        let response = self
-            .http_client
-            .post(endpoint)
-            .form(&form)
-            .send()
-            .await?;
+        let response = self.http_client.post(endpoint).form(&form).send().await?;
 
         let status = response.status();
         let body = response.text().await?;

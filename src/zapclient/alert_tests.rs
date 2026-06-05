@@ -36,7 +36,12 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
 
     let alerts = client
-        .get_alerts("Default Context", Some("https://example.com"), Some(10), Some(25))
+        .get_alerts(
+            "Default Context",
+            Some("https://example.com"),
+            Some(10),
+            Some(25),
+        )
         .await
         .expect("get_alerts should return parsed alerts on success");
 
