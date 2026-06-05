@@ -5,7 +5,7 @@
 use reqwest::StatusCode;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{body_string_contains, method, path, query_param},
+    matchers::{body_string_contains, method, path},
 };
 
 use super::{ZapClient, ZapClientError};
@@ -96,10 +96,10 @@ async fn start_active_scan_returns_parse_error_for_invalid_schema() {
 async fn get_active_scan_status_gets_zap_ascan_status_endpoint() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/ascan/view/status"))
-        .and(query_param("apikey", API_KEY))
-        .and(query_param("scanId", "7"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .and(body_string_contains("scanId=7"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"42\"}"))
         .expect(1)
         .mount(&server)
@@ -120,7 +120,7 @@ async fn get_active_scan_status_gets_zap_ascan_status_endpoint() {
 async fn get_active_scan_status_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/ascan/view/status"))
         .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
         .expect(1)
@@ -148,7 +148,7 @@ async fn get_active_scan_status_returns_unexpected_status_on_http_error() {
 async fn get_active_scan_status_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/ascan/view/status"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"progress\":42}"))
         .expect(1)
@@ -173,7 +173,7 @@ async fn get_active_scan_status_returns_parse_error_for_invalid_schema() {
 async fn get_active_scan_status_returns_unexpected_content_for_out_of_range_status() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/ascan/view/status"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"101\"}"))
         .expect(1)

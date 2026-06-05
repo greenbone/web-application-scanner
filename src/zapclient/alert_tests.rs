@@ -5,7 +5,7 @@
 use reqwest::StatusCode;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{method, path, query_param},
+    matchers::{body_string_contains, method, path},
 };
 
 use super::{AlertRiskLevel, ZapClient, ZapClientError};
@@ -16,11 +16,11 @@ const API_KEY: &str = "test-api-key";
 async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
-        .and(query_param("apikey", API_KEY))
-        .and(query_param("contextName", "Default Context"))
-        .and(query_param("baseurl", "https://example.com"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .and(body_string_contains("contextName=Default+Context"))
+        .and(body_string_contains("baseurl=https%3A%2F%2Fexample.com"))
         .respond_with(
             ResponseTemplate::new(200).set_body_string(
                 "{\"alerts\":[{\"pluginId\":\"40012\",\"name\":\"Cross Site Scripting\",\"risk\":\"High\",\"description\":\"Reflected XSS detected\",\"url\":\"https://example.com/vuln\"}]}",
@@ -52,7 +52,7 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
 async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
         .respond_with(
             ResponseTemplate::new(200).set_body_string(
@@ -79,7 +79,7 @@ async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
 async fn get_alerts_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
         .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
         .expect(1)
@@ -107,7 +107,7 @@ async fn get_alerts_returns_unexpected_status_on_http_error() {
 async fn get_alerts_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"alertItems\":[]}"))
         .expect(1)
@@ -132,10 +132,10 @@ async fn get_alerts_returns_parse_error_for_invalid_schema() {
 async fn get_alerts_omits_baseurl_query_param_when_not_provided() {
     let server = MockServer::start().await;
 
-    Mock::given(method("GET"))
+    Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
-        .and(query_param("apikey", API_KEY))
-        .and(query_param("contextName", "Default Context"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .and(body_string_contains("contextName=Default+Context"))
         .respond_with(ResponseTemplate::new(200).set_body_string("{\"alerts\":[]}"))
         .expect(1)
         .mount(&server)
