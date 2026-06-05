@@ -2,7 +2,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod in_memory;
 pub mod interface;
 pub mod sqlite;
 

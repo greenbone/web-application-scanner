@@ -29,8 +29,11 @@ fn test_uses_defaults_when_env_is_unset() {
     assert_eq!(settings.log_format, settings::DEFAULT_LOG_FORMAT);
     assert_eq!(settings.log_level, settings::DEFAULT_LOG_LEVEL);
     assert_eq!(settings.port, settings::DEFAULT_PORT);
-    assert_eq!(settings.storage_backend, StorageBackend::InMemory);
-    assert!(settings.sqlite_url.is_none());
+    assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
+    assert_eq!(
+        settings.sqlite_url.as_deref(),
+        Some(settings::DEFAULT_SQLITE_URL)
+    );
     assert_eq!(settings.zap_base_url, settings::DEFAULT_ZAP_BASE_URL);
     assert_eq!(settings.zap_api_key, settings::DEFAULT_ZAP_API_KEY);
 }
@@ -75,10 +78,10 @@ fn test_rejects_invalid_port() {
 
 #[test]
 #[serial]
-fn test_storage_backend_defaults_to_inmemory() {
+fn test_storage_backend_defaults_to_sqlite() {
     clear_env();
     let settings = Settings::load().expect("Failed to load settings");
-    assert_eq!(settings.storage_backend, StorageBackend::InMemory);
+    assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
 }
 
 #[test]
@@ -96,10 +99,11 @@ fn test_sqlite_backend_with_url() {
 
 #[test]
 #[serial]
-fn test_sqlite_backend_without_url_is_error() {
+fn test_sqlite_backend_with_empty_url_is_error() {
     clear_env();
     unsafe {
         env::set_var("GREENBONE_WAS_STORAGE_BACKEND", "sqlite");
+        env::set_var("GREENBONE_WAS_SQLITE_URL", "");
     }
     let result = Settings::load();
     assert!(result.is_err());
