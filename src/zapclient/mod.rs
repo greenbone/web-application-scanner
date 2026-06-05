@@ -5,7 +5,7 @@
 //! HTTP client for communicating with the ZAP API.
 
 pub mod ajaxspider;
-pub mod alerts;
+pub mod alert;
 pub mod ascan;
 pub mod context;
 
