@@ -64,5 +64,3 @@ Tests for API endpoints use a mock HTTP server like `wiremock` to verify the fol
 
 
 ## Open questions and notes
-
-- ToDo: Add pagination support (`start`, `count`) to `get_alerts`.

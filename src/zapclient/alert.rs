@@ -42,20 +42,31 @@ struct AlertsResponse {
 }
 
 impl ZapClient {
-    /// Get the list of alerts for the specified context name and optional base URL.
+    /// Get the list of alerts for the specified context name, optional base URL and
+    /// optional pagination parameters.
     pub async fn get_alerts(
         &self,
         context_name: &str,
         base_url: Option<&str>,
+        start: Option<u32>,
+        count: Option<u32>,
     ) -> Result<Vec<Alert>, ZapClientError> {
         let endpoint = self.endpoint_url("JSON/alert/view/alerts");
         let mut form = vec![
-            ("apikey", self.api_key.as_str()),
-            ("contextName", context_name),
+            ("apikey".to_string(), self.api_key.clone()),
+            ("contextName".to_string(), context_name.to_string()),
         ];
 
         if let Some(base_url) = base_url {
-            form.push(("baseurl", base_url));
+            form.push(("baseurl".to_string(), base_url.to_string()));
+        }
+
+        if let Some(start) = start {
+            form.push(("start".to_string(), start.to_string()));
+        }
+
+        if let Some(count) = count {
+            form.push(("count".to_string(), count.to_string()));
         }
 
         let response = self
