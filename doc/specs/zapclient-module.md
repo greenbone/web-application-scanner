@@ -14,7 +14,7 @@ The `zapclient` module does not offer functions for the full API and is limited 
 
 ## Module structure
 
-The client object type is split into general functionality like initialization and error types and separate files for groups of endpoints with a common base path, e.g. the `alerts` module handles JSON endpoints starting with `JSON/alerts`.
+The client object type is split into general functionality like initialization and error types and separate files for groups of endpoints with a common base path, e.g. the `alert` module handles JSON endpoints starting with `JSON/alert`.
 
 ## HTTP request and response handling
 
@@ -32,6 +32,14 @@ Contexts can be identified by `contextName` or `contextId` depending on the endp
 
 Validation of string values should be case-sensitive unless explicitly noted otherwise.
 
+### Error handling
+
+Client functions should handle these errors that can occur during HTTP requests:
+
+- An `UnexpectedStatus` error is raised if the server returns an unexpected HTTP status.
+- A `ParseResponse` error is raised if the server returns a valid HTTP status but the response body cannot be deserialized.
+- An `UnexpectedContent` error is raised if the server returns a valid HTTP status, the response body can be parsed but it contains otherwise unexpected data, e.g. numbers are out of range.
+
 ### Rules for specific endpoints
 
 AJAX Spider status values are normalized case-sensitively to "stopped" and "running".
@@ -46,13 +54,13 @@ Context action endpoints (`removeContext`, `includeInContext`) require exact `"O
 
 ## Tests
 
-Tests must follow the general test guidelines for this repository.
+Tests must follow the general test guidelines for this repository (see `AGENTS.md`).
 
 Tests for API endpoints use a mock HTTP server like `wiremock` to verify the following:
+
 - If requests are valid and the server returns the expected response, the client object gives the expected result value.
-- An `UnexpectedStatus` error is raised if the server returns an unexpected HTTP status.
-- An `ParseResponse` error is raised if the server returns a valid HTTP status but the response body cannot be deserialized.
-- An `ParseResponse` error is raised if the server returns a valid HTTP status, the response body can be parsed but it contains otherwise unexpected data, e.g. numbers are out of range.
+
+- All relevant request errors outlined in ´Error handling` are handled.
 
 
 ## Open questions and notes
