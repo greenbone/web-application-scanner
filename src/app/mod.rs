@@ -13,7 +13,7 @@ use crate::storage::StorageHandle;
 /// Contains references to all services and dependencies needed by the API handlers.
 #[derive(Clone)]
 pub struct AppState {
-    /// Handle to the storage backend (in-memory or SQLite).
+    /// Handle to the configured storage backend.
     pub storage: StorageHandle,
 }
 

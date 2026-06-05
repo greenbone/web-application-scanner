@@ -58,13 +58,18 @@ pub fn build_router(state: AppState) -> Router {
 mod tests {
     use std::sync::Arc;
 
-    use crate::{app::AppState, storage::in_memory::InMemoryStorage};
+    use crate::{
+        app::AppState,
+        config::settings::SQLITE_IN_MEMORY_URL,
+        storage::sqlite::SqliteStorage,
+    };
 
     use super::build_router;
 
-    #[test]
-    fn build_router_accepts_all_route_patterns() {
-        let state = AppState::new(Arc::new(InMemoryStorage::new()));
+    #[tokio::test]
+    async fn build_router_accepts_all_route_patterns() {
+        let storage = SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap();
+        let state = AppState::new(Arc::new(storage));
 
         let _router = build_router(state);
     }

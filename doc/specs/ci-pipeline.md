@@ -96,7 +96,7 @@ compilation issues, and feature mismatches earlier than tests alone.
 ### Tests
 
 - Run `cargo test --locked --all-targets`.
-- Keep tests hermetic: use WireMock and in-memory or temporary SQLite databases
+- Keep tests hermetic: use WireMock and temporary SQLite databases
   rather than a live ZAP daemon.
 - Add `cargo test --locked --doc` once public docs contain executable examples.
 
@@ -126,7 +126,7 @@ contract and the repository already contains a reference document.
 
 ### Binary Smoke Test
 
-- Start `greenbone-was` with the default in-memory storage backend.
+- Start `greenbone-was` with the default SQLite storage backend.
 - Call `/api/v1/health/ready`, which is the `/health/ready` readiness route
   under the current API base path.
 - Use the default port `8030` unless the workflow needs to override the port to

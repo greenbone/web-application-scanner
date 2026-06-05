@@ -81,7 +81,7 @@ Add required jobs:
   - do not generate or compare an implementation-backed OpenAPI document
 - `smoke`
   - build the binary
-  - start `greenbone-was` with the default in-memory backend
+  - start `greenbone-was` with the default SQLite backend
   - call `GET http://127.0.0.1:8030/api/v1/health/ready`
   - fail if readiness does not return successfully within the startup timeout
   - always stop the process

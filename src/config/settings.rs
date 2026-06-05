@@ -14,8 +14,14 @@ pub const DEFAULT_LOG_LEVEL: &str = "info";
 /// Default HTTP server port.
 pub const DEFAULT_PORT: u16 = 8030;
 
-/// Default storage backend (in-memory).
-pub const DEFAULT_STORAGE_BACKEND: &str = "inmemory";
+/// Default storage backend (SQLite).
+pub const DEFAULT_STORAGE_BACKEND: &str = "sqlite";
+
+/// In-memory SQLite connection URL.
+pub const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
+
+/// Default SQLite connection URL.
+pub const DEFAULT_SQLITE_URL: &str = SQLITE_IN_MEMORY_URL;
 
 /// Default ZAP API base URL.
 pub const DEFAULT_ZAP_BASE_URL: &str = "http://127.0.0.1:8547";
@@ -26,7 +32,6 @@ pub const DEFAULT_ZAP_API_KEY: &str = "test-api-key";
 /// Runtime selection of the storage backend.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StorageBackend {
-    InMemory,
     Sqlite,
 }
 
@@ -83,7 +88,7 @@ impl Settings {
             .set_default("log_level", "info")?
             .set_default("port", 8030)?
             .set_default("storage_backend", DEFAULT_STORAGE_BACKEND)?
-            .set_default("sqlite_url", "")?
+            .set_default("sqlite_url", DEFAULT_SQLITE_URL)?
             .set_default("zap_base_url", DEFAULT_ZAP_BASE_URL)?
             .set_default("zap_api_key", DEFAULT_ZAP_API_KEY)
     }
@@ -97,11 +102,10 @@ impl Settings {
         }
 
         let storage_backend = match raw.storage_backend.as_str() {
-            "inmemory" => StorageBackend::InMemory,
             "sqlite" => StorageBackend::Sqlite,
             other => {
                 return Err(ConfigError::Message(format!(
-                    "unknown storage backend '{}'; valid values are 'inmemory' and 'sqlite'",
+                    "unknown storage backend '{}'; valid value is 'sqlite'",
                     other
                 )));
             }

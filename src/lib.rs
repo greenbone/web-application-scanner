@@ -21,8 +21,8 @@ use std::sync::Arc;
 
 use crate::{
     app::{AppState, error::AppError},
-    config::settings::{Settings, StorageBackend},
-    storage::{in_memory::InMemoryStorage, sqlite::SqliteStorage},
+    config::settings::Settings,
+    storage::sqlite::SqliteStorage,
 };
 
 use tracing::info;
@@ -32,21 +32,13 @@ pub async fn run() -> Result<(), AppError> {
     let settings = Settings::load()?;
     logging::init_logging(&settings);
 
-    let storage: Arc<dyn storage::ScanStorage> = match settings.storage_backend {
-        StorageBackend::InMemory => {
-            info!("Using in-memory storage backend");
-            Arc::new(InMemoryStorage::new())
-        }
-        StorageBackend::Sqlite => {
-            let url = settings.sqlite_url.as_deref().unwrap(); // validated in settings
-            info!("Using SQLite storage backend: {}", url);
-            Arc::new(
-                SqliteStorage::new(url)
-                    .await
-                    .map_err(|e| AppError::Storage(e.to_string()))?,
-            )
-        }
-    };
+    let url = settings.sqlite_url.as_deref().unwrap(); // validated in settings
+    info!("Using SQLite storage backend: {}", url);
+    let storage: Arc<dyn storage::ScanStorage> = Arc::new(
+        SqliteStorage::new(url)
+            .await
+            .map_err(|e| AppError::Storage(e.to_string()))?,
+    );
 
     let state = AppState::new(storage);
     let router = http::router::build_router(state);

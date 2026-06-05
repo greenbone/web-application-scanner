@@ -147,7 +147,7 @@ jobs:
       - name: Start service and check readiness
         env:
           GREENBONE_WAS_PORT: "8030"
-          GREENBONE_WAS_STORAGE_BACKEND: inmemory
+          GREENBONE_WAS_STORAGE_BACKEND: sqlite
           GREENBONE_WAS_LOG_LEVEL: info
         run: |
           set -euo pipefail

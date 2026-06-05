@@ -4,9 +4,10 @@
 
 use super::*;
 use crate::api::dto::scans::ResultType;
+use crate::config::settings::SQLITE_IN_MEMORY_URL;
 
 async fn make_storage() -> SqliteStorage {
-    SqliteStorage::new("sqlite::memory:").await.unwrap()
+    SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap()
 }
 
 fn make_scan(id: &str) -> ScanRecord {
