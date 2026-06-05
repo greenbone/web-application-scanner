@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2024"
 description = "Greenbone web application scanner"
 publish = false
+default-run = "greenbone-was"
 
 [[bin]]
 name = "greenbone-was"
 path = "src/main.rs"
+
+[[bin]]
+name = "was-cli-test"
+path = "src/clitest.rs"
 
 [dependencies]
 async-trait = "0.1"
@@ -24,6 +29,7 @@ tower-http = { version = "0.6.11", features = ["trace"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["default", "env-filter", "fmt", "json"] }
 uuid = { version = "1", features = ["v4"] }
+regex = "1.12.3"
 
 [dev-dependencies]
 serial_test = "3.5.0"
