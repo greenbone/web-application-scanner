@@ -5,8 +5,6 @@
 use std::thread::sleep;
 use std::time::Duration;
 
-use regex;
-
 const API_KEY: &str = "test-api-key";
 const BASE_URL: &str = "http://localhost:8080";
 
