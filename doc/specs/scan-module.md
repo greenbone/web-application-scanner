@@ -125,7 +125,11 @@ If either the AJAX spider or active scan times out, a warning is logged and an e
 
 Alert polling and context operations do not have dedicated timeouts; transient failures are handled by the general retry mechanism.
 
-After each poll of the active scan status, the worker also fetches the latest ZAP alerts and adds them to the scan.
+After each poll of the active scan status, the worker also fetches the latest ZAP alerts and converts them into scan results in storage.
+
+The alert-to-result conversion uses a dedicated storage function that accepts multiple alerts and persists all corresponding results in one transaction.
+
+The alert cursor must only be advanced after successful commit of the corresponding alert-to-result batch transaction.
 
 When all active scans are finished and all alerts are fetched, the ZAP context is removed and the scan status is set to `done`. Failure to remove the context will not alter the status.
 
@@ -191,6 +195,10 @@ The per-target percentages are also aggregated into an overall percentage of all
 Alerts are polled by the scan worker at configurable regular intervals (default: 10 seconds).
 
 Alerts are expected to be served by the ZAP API in a stable order, so to avoid duplicates, pagination is used, starting at the number of already processed alerts.
+
+Fetched alerts are converted and inserted as result records in batches, with one transaction per processed alert page.
+
+For each processed alert page, batch result persistence must succeed before the processed-alert cursor is updated.
 
 
 ## Observability
