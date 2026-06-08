@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 use crate::{
-    api::dto::scans::{ScannerPreference, Target, Vt},
+    api::dto::scans::{PreferencesResponse, ScannerPreference, Target, Vt},
     scan::{ScanServiceError, ScanStatus},
     storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
 };
@@ -29,7 +29,19 @@ pub struct CreateScanRequest {
 /// Internal scan orchestration commands used by transport handlers.
 #[async_trait]
 pub trait ScanService: Send + Sync {
+    async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError>;
+
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError>;
+
+    async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError>;
+
+    async fn get_scan_result(&self, id: &str, result_id: i64)
+    -> Result<ResultRecord, ScanServiceError>;
+
+    async fn get_scan_status(
+        &self,
+        id: &str,
+    ) -> Result<(ScanStatus, Option<i64>, Option<i64>), ScanServiceError>;
 
     async fn start_scan(&self, id: &str) -> Result<(), ScanServiceError>;
 
@@ -66,6 +78,10 @@ impl DefaultScanService {
 
 #[async_trait]
 impl ScanService for DefaultScanService {
+    async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError> {
+        Ok(PreferencesResponse::default())
+    }
+
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
         let id = Uuid::new_v4().to_string();
         let scan = ScanRecord {
@@ -84,6 +100,32 @@ impl ScanService for DefaultScanService {
             .map_err(Self::map_storage_err)?;
 
         Ok(id)
+    }
+
+    async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError> {
+        self.storage.get_scan(id).await.map_err(Self::map_storage_err)
+    }
+
+    async fn get_scan_result(
+        &self,
+        id: &str,
+        result_id: i64,
+    ) -> Result<ResultRecord, ScanServiceError> {
+        self.storage
+            .get_result(id, result_id)
+            .await
+            .map_err(Self::map_storage_err)
+    }
+
+    async fn get_scan_status(
+        &self,
+        id: &str,
+    ) -> Result<(ScanStatus, Option<i64>, Option<i64>), ScanServiceError> {
+        self.storage
+            .get_scan(id)
+            .await
+            .map(|scan| (scan.status, scan.start_time, scan.end_time))
+            .map_err(Self::map_storage_err)
     }
 
     async fn start_scan(&self, id: &str) -> Result<(), ScanServiceError> {

@@ -47,6 +47,8 @@ Phase 0 amendments (2026-06-08):
 
 ## Phase 1: Scan Service Facade
 
+Status: Done (2026-06-08)
+
 Create an internal scan service interface used by API handlers.
 
 - Add a `ScanService` (or equivalent module-level orchestration API) with commands:
@@ -72,8 +74,8 @@ Phase 1 amendments (2026-06-08):
 
 - Initial service facade was wired for `create_scan`, `start_scan`, `stop_scan`, `delete_scan`, and `get_results`.
 - `GET /scans/preferences` is served via `ScanService::get_default_preferences` and currently returns default/static preferences.
-- Remaining read endpoints (`get_scan`, `get_scan_status`, `get_result`) must be migrated to `ScanService` so API handlers stop calling storage directly.
-- Unify read-command error mapping through scan-domain service errors and keep API responsibilities limited to HTTP parsing and response mapping.
+- Remaining read endpoints (`get_scan`, `get_scan_status`, `get_scan_result`) were migrated to `ScanService` so API handlers no longer call storage directly.
+- Read-command error mapping is unified through scan-domain service errors while API responsibilities remain limited to HTTP parsing and response mapping.
 
 ## Phase 2: Storage Model Extensions and Atomic Updates
 
