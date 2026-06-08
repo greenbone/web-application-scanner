@@ -23,6 +23,7 @@ use std::sync::Arc;
 use crate::{
     app::{AppState, error::AppError},
     config::settings::Settings,
+    scan::{DefaultScanService, ScanServiceHandle},
     storage::sqlite::SqliteStorage,
 };
 
@@ -40,8 +41,9 @@ pub async fn run() -> Result<(), AppError> {
             .await
             .map_err(|e| AppError::Storage(e.to_string()))?,
     );
+    let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(storage.clone()));
 
-    let state = AppState::new(storage);
+    let state = AppState::new(storage, scan_service);
     let router = http::router::build_router(state);
     let listener = http::listener::bind_tcp(settings.port).await?;
 

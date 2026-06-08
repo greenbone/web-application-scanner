@@ -7,6 +7,7 @@
 pub mod error;
 
 use crate::storage::StorageHandle;
+use crate::scan::ScanServiceHandle;
 
 /// Application state injected into every Axum route handler.
 ///
@@ -15,11 +16,16 @@ use crate::storage::StorageHandle;
 pub struct AppState {
     /// Handle to the configured storage backend.
     pub storage: StorageHandle,
+    /// Handle to the internal scan orchestration service.
+    pub scan_service: ScanServiceHandle,
 }
 
 impl AppState {
     /// Create a new application state with the given storage backend.
-    pub fn new(storage: StorageHandle) -> Self {
-        Self { storage }
+    pub fn new(storage: StorageHandle, scan_service: ScanServiceHandle) -> Self {
+        Self {
+            storage,
+            scan_service,
+        }
     }
 }
