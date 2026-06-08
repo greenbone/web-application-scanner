@@ -34,7 +34,6 @@ Initial command:
 greenbone-was-vtgen \
   --input src/feed/tmp/alerts \
   --output target/generated-feed/nasl \
-  --contributor 123456 \
   --version-date 2026-06-01T00:00:00+0000
 ```
 
@@ -42,7 +41,6 @@ Required behavior:
 
 - `--input`: directory containing ZAP alert Markdown files.
 - `--output`: directory where generated `.nasl` files are written.
-- `--contributor`: OID contributor number; default `123456`.
 - `--version-date`: NASL `script_version` timestamp; default to current UTC
   time.
 - `--fail-on-warning`: optional stricter CI mode that returns a non-zero exit
@@ -131,7 +129,8 @@ Acceptance:
 
 ### Phase 2: Metadata Mapping
 
-- Implement OID encoding with configurable contributor number.
+- Implement OID mapping under `1.3.6.1.4.1.25623.3` using direct alert ID
+  child arcs.
 - Implement deterministic output file names.
 - Map canonical NASL metadata exactly as specified.
 - Preserve ZAP `alerttype` through `script_xref(name:"ZAP-Alert-Type", ...)`.

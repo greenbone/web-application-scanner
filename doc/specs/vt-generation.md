@@ -61,33 +61,31 @@ output.
 
 Each generated VT needs a stable OID derived from the ZAP alert ID.
 
+Greenbone's enterprise base OID is `1.3.6.1.4.1.25623`
+(`iso.org.dod.internet.private.enterprise.OpenVAS`). The assigned subtree
+`1.3.6.1.4.1.25623.3` is reserved for ZAP alerts.
+
 OID format:
 
 ```text
-1.3.6.1.4.1.25623.1.<contributor>.<encoded-alert-id>
+1.3.6.1.4.1.25623.3.<base-alert-id>[.<sub-alert-id>]
 ```
 
-The contributor number is configurable. Until a feed-owned contributor number is
-assigned, the generator defaults to `123456`.
-
-The encoded alert ID is:
-
-```text
-1 + six-digit base alert id + two-digit sub alert id
-```
+The generator must map the ZAP `alertid` directly into OID child arcs. It must
+not zero-pad, prefix, concatenate, or otherwise encode the base alert ID and
+sub-alert ID into a synthetic numeric suffix.
 
 Rules:
 
-- For `alertid: 353-1`, encode `353` as `000353` and `1` as `01`, producing
-  `100035301`.
-- For `alertid: 40012`, use sub alert id `00`, producing `104001200`.
-- For `alertid: 10020-4`, produce `101002004`.
-- Fail generation if the base ID does not fit six digits or a sub alert ID does
-  not fit two digits.
+- For `alertid: 353-1`, produce `1.3.6.1.4.1.25623.3.353.1`.
+- For `alertid: 40012`, produce `1.3.6.1.4.1.25623.3.40012`.
+- For `alertid: 10020-4`, produce `1.3.6.1.4.1.25623.3.10020.4`.
+- Fail generation if the base alert ID or sub-alert ID is not a non-negative
+  decimal integer.
 
 The ZAP `alertindex` field must be recorded for traceability, but it must not
-be used directly as the NASL OID suffix because it is not fixed-width across
-small and large alert IDs.
+be used directly as the NASL OID suffix because the OID is derived from the
+source `alertid` and preserves sub-alerts as separate child arcs.
 
 ## Canonical NASL Metadata Mapping
 
@@ -97,7 +95,7 @@ canonical NASL metadata.
 | ZAP source field | NASL metadata | Required | Notes |
 | --- | --- | --- | --- |
 | `alertid` | `script_xref(name:"ZAP-Alert-ID", value:"...")` | Yes | Preserve the exact source ID, including sub-alert suffixes. |
-| Encoded `alertid` | `script_oid(...)` | Yes | Use the OID allocation rules above. |
+| `alertid` OID arcs | `script_oid(...)` | Yes | Use the OID allocation rules above. |
 | `title` | `script_name(...)` | Yes | Use the concrete child title for leaf alerts. If missing, fall back to `name`, then parent alertset name. |
 | Generated timestamp | `script_version(...)` | Yes | Use the generation timestamp in NASL version format. |
 | `date` | `script_tag(name:"creation_date", value:"...")` | No | Use only if present; otherwise use the generation timestamp. |
@@ -264,7 +262,7 @@ ZAP alert IDs. Generate them with:
 ```nasl
 if (description)
 {
-  script_oid("1.3.6.1.4.1.25623.1.123456.101002001");
+  script_oid("1.3.6.1.4.1.25623.3.10020.1");
   script_version("2026-06-01T00:00:00+0000");
   script_tag(name:"creation_date", value:"2026-06-01 00:00:00 +0000");
   script_tag(name:"last_modification", value:"2026-06-01 00:00:00 +0000");
@@ -303,7 +301,7 @@ Generation must fail for:
 - Invalid alert ID format.
 - Missing `title`/`name`.
 - Invalid URL values in `references`, `help`, or `code`.
-- OID collisions after alert ID encoding.
+- OID collisions after direct alert ID arc mapping.
 
 Generation should warn, but not fail, for:
 
