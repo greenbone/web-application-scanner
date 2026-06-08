@@ -20,7 +20,7 @@ fn make_scan(id: &str) -> ScanRecord {
         },
         scan_preferences: vec![],
         vts: vec![],
-        status: ScanStatus::Stored,
+        status: ScanStatus::New,
         start_time: None,
         end_time: None,
     }
@@ -47,7 +47,7 @@ async fn create_and_get_scan() {
     s.create_scan(make_scan("s1")).await.unwrap();
     let scan = s.get_scan("s1").await.unwrap();
     assert_eq!(scan.id, "s1");
-    assert_eq!(scan.status, ScanStatus::Stored);
+    assert_eq!(scan.status, ScanStatus::New);
     assert_eq!(scan.target.hosts, vec!["10.0.0.1"]);
 }
 

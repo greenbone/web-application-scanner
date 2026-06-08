@@ -10,7 +10,10 @@
 use async_trait::async_trait;
 use thiserror::Error;
 
-use crate::api::dto::scans::{ResultType, ScanStatus, ScannerPreference, Target, Vt};
+use crate::{
+    api::dto::scans::{ResultType, ScannerPreference, Target, Vt},
+    scan::ScanStatus,
+};
 
 /// Full persisted scan record.
 ///
