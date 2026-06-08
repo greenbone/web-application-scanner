@@ -94,7 +94,8 @@ Add persistence support for runtime worker state and safe transitions.
   - atomic transition update with expected previous scan-domain lifecycle status
   - progress update
   - context metadata update
-  - alert cursor update
+  - batch alert-to-result persistence (multiple alerts in one transaction)
+  - alert cursor update (executed only after successful alert-to-result batch commit)
   - listing scans in non-terminal states (startup recovery)
 - Use SQL transactions for all state + progress changes done together.
 - Keep existing results storage behavior and retain partial results for stopped/interrupted scans.
@@ -115,6 +116,8 @@ Implement asynchronous execution with FIFO queue and configurable worker count.
   4. run AJAX spider per target and update stage progress
   5. run active scan per target and update stage progress
   6. poll alerts while scanning using pagination cursor
+  6.1 convert fetched alert batches to result records via transactional multi-alert storage function
+  6.2 update the alert cursor only after the batch persistence transaction succeeds
   7. cleanup context and finalize `done`
 - On worker/internal error in non-terminal states, transition to `interrupted`.
 - If cleanup fails after successful scan completion, keep scan lifecycle status `done` and log warning.
@@ -205,6 +208,8 @@ Follow repository sidecar test pattern.
   - non-terminal scans become `interrupted` on startup.
 - Add URL validation tests for all rejection rules.
 - Add alert pagination tests ensuring duplicate avoidance.
+- Add tests for alert-to-result batch conversion ensuring all converted results are written atomically per alert page.
+- Add tests proving alert cursor advancement happens only after successful alert-to-result persistence.
 - Add service tests for read commands (`get_scan`, `get_scan_status`, `get_result`) including not-found behavior.
 - Add API tests confirming scan endpoints use the service facade and keep storage access out of handler logic.
 
