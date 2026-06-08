@@ -19,13 +19,10 @@ use feed::{
     validation::ValidationReport,
 };
 
-const DEFAULT_CONTRIBUTOR: u32 = 123456;
-
 #[derive(Debug)]
 struct Cli {
     input: PathBuf,
     output: PathBuf,
-    contributor: u32,
     version_date: String,
     fail_on_warning: bool,
     dry_run: bool,
@@ -51,7 +48,6 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), ExitCode> {
 
     let (docs, mut report, input_count) = load_docs(&cli.input);
     let config = GenerateConfig {
-        contributor: cli.contributor,
         version_date: cli.version_date.clone(),
     };
     let (vts, generation_report) = generate_vts(docs, &config);
@@ -96,7 +92,6 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), ExitCode> {
 fn parse_cli(args: impl IntoIterator<Item = String>) -> Result<Option<Cli>, String> {
     let mut input = None;
     let mut output = None;
-    let mut contributor = DEFAULT_CONTRIBUTOR;
     let mut version_date = None;
     let mut fail_on_warning = false;
     let mut dry_run = false;
@@ -110,12 +105,6 @@ fn parse_cli(args: impl IntoIterator<Item = String>) -> Result<Option<Cli>, Stri
             }
             "--input" => input = Some(next_arg(&mut args, "--input")?.into()),
             "--output" => output = Some(next_arg(&mut args, "--output")?.into()),
-            "--contributor" => {
-                let value = next_arg(&mut args, "--contributor")?;
-                contributor = value
-                    .parse()
-                    .map_err(|_| format!("--contributor must be an unsigned integer: {value}"))?;
-            }
             "--version-date" => version_date = Some(next_arg(&mut args, "--version-date")?),
             "--fail-on-warning" => fail_on_warning = true,
             "--dry-run" => dry_run = true,
@@ -126,7 +115,6 @@ fn parse_cli(args: impl IntoIterator<Item = String>) -> Result<Option<Cli>, Stri
     Ok(Some(Cli {
         input: input.ok_or("--input is required")?,
         output: output.ok_or("--output is required")?,
-        contributor,
         version_date: version_date.unwrap_or_else(current_utc_version_date),
         fail_on_warning,
         dry_run,
@@ -140,7 +128,7 @@ fn next_arg(args: &mut impl Iterator<Item = String>, flag: &str) -> Result<Strin
 
 fn print_usage() {
     eprintln!(
-        "usage: greenbone-was-vtgen --input <dir> --output <dir> [--contributor 123456] [--version-date 2026-06-01T00:00:00+0000] [--fail-on-warning] [--dry-run]"
+        "usage: greenbone-was-vtgen --input <dir> --output <dir> [--version-date 2026-06-01T00:00:00+0000] [--fail-on-warning] [--dry-run]"
     );
 }
 
@@ -255,6 +243,20 @@ mod tests {
     fn parse_cli_requires_input_and_output_to_prevent_accidental_generation() {
         let err = parse_cli(["--input".to_string(), "alerts".to_string()]).unwrap_err();
         assert_eq!(err, "--output is required");
+    }
+
+    #[test]
+    fn parse_cli_rejects_removed_contributor_option() {
+        let err = parse_cli([
+            "--input".to_string(),
+            "alerts".to_string(),
+            "--output".to_string(),
+            "nasl".to_string(),
+            "--contributor".to_string(),
+            "123456".to_string(),
+        ])
+        .unwrap_err();
+        assert_eq!(err, "unknown argument: --contributor");
     }
 
     #[test]

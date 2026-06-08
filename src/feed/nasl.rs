@@ -34,21 +34,11 @@ pub struct Tag {
     pub value: String,
 }
 
-pub fn encode_oid(contributor: u32, alert_id: &AlertId) -> Result<String, String> {
-    if alert_id.base > 999_999 {
-        return Err(format!(
-            "base alert id does not fit six digits: {}",
-            alert_id.base
-        ));
+pub fn encode_oid(alert_id: &AlertId) -> String {
+    match alert_id.sub {
+        Some(sub) => format!("1.3.6.1.4.1.25623.3.{}.{}", alert_id.base, sub),
+        None => format!("1.3.6.1.4.1.25623.3.{}", alert_id.base),
     }
-    let sub = alert_id.sub.unwrap_or(0);
-    if sub > 99 {
-        return Err(format!("sub alert id does not fit two digits: {sub}"));
-    }
-    Ok(format!(
-        "1.3.6.1.4.1.25623.1.{contributor}.1{:06}{:02}",
-        alert_id.base, sub
-    ))
 }
 
 pub fn render(metadata: &NaslMetadata) -> String {
@@ -242,18 +232,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn oid_encoding_uses_fixed_width_alert_ids_from_spec_examples() {
+    fn oid_encoding_uses_alert_id_arcs_from_spec_examples() {
         assert_eq!(
-            encode_oid(123456, &"353-1".parse().unwrap()).unwrap(),
-            "1.3.6.1.4.1.25623.1.123456.100035301"
+            encode_oid(&"353-1".parse().unwrap()),
+            "1.3.6.1.4.1.25623.3.353.1"
         );
         assert_eq!(
-            encode_oid(123456, &"40012".parse().unwrap()).unwrap(),
-            "1.3.6.1.4.1.25623.1.123456.104001200"
+            encode_oid(&"40012".parse().unwrap()),
+            "1.3.6.1.4.1.25623.3.40012"
         );
         assert_eq!(
-            encode_oid(123456, &"10020-4".parse().unwrap()).unwrap(),
-            "1.3.6.1.4.1.25623.1.123456.101002004"
+            encode_oid(&"10020-4".parse().unwrap()),
+            "1.3.6.1.4.1.25623.3.10020.4"
         );
     }
 

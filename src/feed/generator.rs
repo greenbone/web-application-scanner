@@ -15,7 +15,6 @@ use super::{
 
 #[derive(Debug, Clone)]
 pub struct GenerateConfig {
-    pub contributor: u32,
     pub version_date: String,
 }
 
@@ -150,13 +149,7 @@ fn generate_candidate(
     validate_urls(doc, report);
     validate_required_fields(&candidate, report);
 
-    let oid = match encode_oid(config.contributor, &doc.alert_id) {
-        Ok(oid) => oid,
-        Err(err) => {
-            report.error(doc.path.clone(), Some(alert_id.clone()), err);
-            return None;
-        }
-    };
+    let oid = encode_oid(&doc.alert_id);
 
     if report.error_count() > error_count_before {
         return None;
@@ -475,7 +468,6 @@ The response does not protect against clickjacking.
         let (vts, report) = generate_vts(
             vec![parent, child],
             &GenerateConfig {
-                contributor: 123456,
                 version_date: "2026-06-01T00:00:00+0000".to_string(),
             },
         );
@@ -522,7 +514,6 @@ Parent summary.
         let (vts, report) = generate_vts(
             vec![parent],
             &GenerateConfig {
-                contributor: 123456,
                 version_date: "2026-06-01T00:00:00+0000".to_string(),
             },
         );
@@ -560,7 +551,6 @@ This alert is deprecated.
         let (vts, report) = generate_vts(
             vec![doc],
             &GenerateConfig {
-                contributor: 123456,
                 version_date: "2026-06-01T00:00:00+0000".to_string(),
             },
         );
@@ -605,7 +595,6 @@ Summary.
         let (vts, report) = generate_vts(
             vec![doc],
             &GenerateConfig {
-                contributor: 123456,
                 version_date: "2026-06-01T00:00:00+0000".to_string(),
             },
         );
@@ -643,7 +632,6 @@ Summary.
         let (vts, report) = generate_vts(
             vec![doc],
             &GenerateConfig {
-                contributor: 123456,
                 version_date: "2026-06-01T00:00:00+0000".to_string(),
             },
         );
