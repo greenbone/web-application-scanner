@@ -9,7 +9,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use serde::Deserialize;
-use uuid::Uuid;
 
 use crate::{
     api,
@@ -18,8 +17,8 @@ use crate::{
         ScanRequest, ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
-    scan,
-    storage::interface::{ResultRecord, ScanRecord, StorageError, parse_range},
+    scan::{CreateScanRequest, ScanServiceError},
+    storage::interface::{ResultRecord, StorageError, parse_range},
 };
 
 /// Query parameters for the GET `/scans/{id}/results` endpoint.
@@ -42,6 +41,20 @@ fn storage_err(e: StorageError) -> Response {
         StorageError::BadRange(_) => StatusCode::BAD_REQUEST.into_response(),
         StorageError::Backend(msg) => {
             tracing::error!("storage backend error: {}", msg);
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
+    }
+}
+
+/// Convert scan service errors to appropriate HTTP responses.
+fn scan_service_err(e: ScanServiceError) -> Response {
+    match e {
+        ScanServiceError::InvalidTransition { .. } => StatusCode::NOT_ACCEPTABLE.into_response(),
+        ScanServiceError::ScanNotFound(_) => StatusCode::NOT_FOUND.into_response(),
+        ScanServiceError::InvalidUrl { .. } => StatusCode::BAD_REQUEST.into_response(),
+        ScanServiceError::Storage(storage_error) => storage_err(storage_error),
+        ScanServiceError::ZapClient(zap_error) => {
+            tracing::error!("scan service zap client error: {}", zap_error);
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
@@ -87,19 +100,15 @@ pub async fn create_scan(
     State(state): State<AppState>,
     Json(req): Json<ScanRequest>,
 ) -> impl IntoResponse {
-    let id = Uuid::new_v4().to_string();
-    let scan = ScanRecord {
-        id: id.clone(),
+    let request = CreateScanRequest {
         target: req.target,
         scan_preferences: req.scan_preferences,
         vts: req.vts,
-        status: scan::ScanStatus::New,
-        start_time: None,
-        end_time: None,
     };
-    match state.storage.create_scan(scan).await {
-        Ok(()) => (StatusCode::CREATED, Json(ScanIdResponse { id })).into_response(),
-        Err(e) => storage_err(e),
+
+    match state.scan_service.create_scan(request).await {
+        Ok(id) => (StatusCode::CREATED, Json(ScanIdResponse { id })).into_response(),
+        Err(e) => scan_service_err(e),
     }
 }
 
@@ -133,25 +142,14 @@ pub async fn scan_action(
     Path(id): Path<String>,
     Json(req): Json<ScanActionRequest>,
 ) -> impl IntoResponse {
-    let scan = match state.storage.get_scan(&id).await {
-        Ok(s) => s,
-        Err(e) => return storage_err(e),
+    let result = match req.action {
+        ScanAction::Start => state.scan_service.start_scan(&id).await,
+        ScanAction::Stop => state.scan_service.stop_scan(&id).await,
     };
 
-    let new_status = match req.action {
-        ScanAction::Start => match scan.status.start_command_transition() {
-            Some(status) => status,
-            None => return StatusCode::NOT_ACCEPTABLE.into_response(),
-        },
-        ScanAction::Stop => match scan.status.stop_command_transition() {
-            Some(status) => status,
-            None => return StatusCode::NOT_ACCEPTABLE.into_response(),
-        },
-    };
-
-    match state.storage.update_scan_status(&id, new_status).await {
+    match result {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
 
@@ -162,17 +160,9 @@ pub async fn delete_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    let scan = match state.storage.get_scan(&id).await {
-        Ok(s) => s,
-        Err(e) => return storage_err(e),
-    };
-    if !scan.status.can_delete() {
-        return StatusCode::NOT_ACCEPTABLE.into_response();
-    }
-
-    match state.storage.delete_scan(&id).await {
+    match state.scan_service.delete_scan(&id).await {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
 
@@ -193,11 +183,11 @@ pub async fn get_scan_results(
         None => (0, None),
     };
 
-    match state.storage.get_results(&id, start, end).await {
+    match state.scan_service.get_results(&id, start, end).await {
         Ok(results) => {
             Json(results.into_iter().map(result_response).collect::<Vec<_>>()).into_response()
         }
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
 

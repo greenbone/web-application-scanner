@@ -61,6 +61,7 @@ mod tests {
     use crate::{
         app::AppState,
         config::settings::SQLITE_IN_MEMORY_URL,
+        scan::{DefaultScanService, ScanServiceHandle},
         storage::sqlite::SqliteStorage,
     };
 
@@ -68,8 +69,9 @@ mod tests {
 
     #[tokio::test]
     async fn build_router_accepts_all_route_patterns() {
-        let storage = SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap();
-        let state = AppState::new(Arc::new(storage));
+        let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+        let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(storage.clone()));
+        let state = AppState::new(storage, scan_service);
 
         let _router = build_router(state);
     }
