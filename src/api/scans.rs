@@ -13,8 +13,8 @@ use serde::Deserialize;
 use crate::{
     api,
     api::dto::scans::{
-        PreferencesResponse, ScanAction, ScanActionRequest, ScanDetailResponse, ScanIdResponse,
-        ScanRequest, ScanResultResponse, ScanStatusResponse,
+        ScanAction, ScanActionRequest, ScanDetailResponse, ScanIdResponse, ScanRequest,
+        ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
     scan::{CreateScanRequest, ScanServiceError},
@@ -113,8 +113,11 @@ pub async fn create_scan(
 }
 
 /// GET /scans/preferences — Retrieve available scan preferences.
-pub async fn get_scan_preferences() -> Json<PreferencesResponse> {
-    Json(PreferencesResponse::default())
+pub async fn get_scan_preferences(State(state): State<AppState>) -> impl IntoResponse {
+    match state.scan_service.get_default_preferences().await {
+        Ok(preferences) => Json(preferences).into_response(),
+        Err(e) => scan_service_err(e),
+    }
 }
 
 /// GET /scans/{id} — Retrieve scan details.
@@ -122,7 +125,7 @@ pub async fn get_scan_preferences() -> Json<PreferencesResponse> {
 /// Returns the target, scan preferences, and VTs for the requested scan.
 /// Returns 404 if the scan does not exist.
 pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
-    match state.storage.get_scan(&id).await {
+    match state.scan_service.get_scan(&id).await {
         Ok(scan) => Json(ScanDetailResponse {
             scan_id: scan.id,
             target: scan.target,
@@ -130,7 +133,7 @@ pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> 
             vts: scan.vts,
         })
         .into_response(),
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
 
@@ -203,9 +206,9 @@ pub async fn get_scan_result(
         Err(_) => return StatusCode::BAD_REQUEST.into_response(),
     };
 
-    match state.storage.get_result(&id, result_id).await {
+    match state.scan_service.get_scan_result(&id, result_id).await {
         Ok(r) => Json(result_response(r)).into_response(),
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
 
@@ -216,13 +219,13 @@ pub async fn get_scan_status(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> impl IntoResponse {
-    match state.storage.get_scan(&id).await {
-        Ok(scan) => Json(ScanStatusResponse {
-            status: scan.status,
-            start_time: scan.start_time,
-            end_time: scan.end_time,
+    match state.scan_service.get_scan_status(&id).await {
+        Ok((status, start_time, end_time)) => Json(ScanStatusResponse {
+            status,
+            start_time,
+            end_time,
         })
         .into_response(),
-        Err(e) => storage_err(e),
+        Err(e) => scan_service_err(e),
     }
 }
