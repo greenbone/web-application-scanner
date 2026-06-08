@@ -18,6 +18,8 @@ Authentication is handled by the API server before scan module commands are call
 
 The scan module assumes requests are already authenticated. Authenticated users have full access to all scans.
 
+API handlers are transport adapters only and must not contain scan lifecycle or persistence logic.
+
 ## Target definition
 
 Targets are comma-separated lists of HTTP or HTTPS URLs with the following rules:
@@ -143,11 +145,23 @@ If a ZAP stop action fails in a non-temporary way, the scan should be interrupte
 
 If the cleanup of the context fails, the scan status is still set to `stopped`.
 
-### Result fetching
+### Scan read commands and result fetching
 
-Scan results for a given scan id can be fetched with the `get_results` command.
+The scan module exposes read commands used by scan API endpoints:
+- `get_default_preferences`: returns the available scanner preferences and their default values.
+- `get_scan`: returns persisted scan request data and identifiers for a scan id.
+- `get_scan_status`: returns lifecycle status and timestamps for a scan id.
+- `get_result`: returns a single result by scan id and result index.
+- `get_results`: returns a result slice by scan id and optional range.
 
-Already fetched scan results remain available even if the scan is stopped or interrupted. In this case the status also implies that results are partial.
+All scan endpoint data access, including read-only access, is routed through scan module commands rather than calling storage directly from API handlers.
+
+Storage-backed missing data outcomes are mapped to `ScanNotFound` for missing scans and to a result-not-found service error (or forwarded storage error) for missing result indexes.
+
+Transport-only endpoints remain outside the scan command surface:
+- `HEAD /scans` metadata endpoint.
+
+Scan results remain available even if the scan is stopped or interrupted. In this case the status also implies that results are partial.
 
 ### Deleting Scans
 
