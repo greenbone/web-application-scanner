@@ -15,9 +15,10 @@ use crate::{
     api,
     api::dto::scans::{
         PreferencesResponse, ScanAction, ScanActionRequest, ScanDetailResponse, ScanIdResponse,
-        ScanRequest, ScanResultResponse, ScanStatus, ScanStatusResponse,
+        ScanRequest, ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
+    scan,
     storage::interface::{ResultRecord, ScanRecord, StorageError, parse_range},
 };
 
@@ -92,7 +93,7 @@ pub async fn create_scan(
         target: req.target,
         scan_preferences: req.scan_preferences,
         vts: req.vts,
-        status: ScanStatus::Stored,
+        status: scan::ScanStatus::New,
         start_time: None,
         end_time: None,
     };
@@ -126,8 +127,7 @@ pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> 
 
 /// POST /scans/{id} — Perform an action on a scan (start or stop).
 ///
-/// Enforces state transitions: Start only from Stored/Succeeded/Failed,
-/// Stop only from Requested/Running. Returns 406 if transition is invalid.
+/// Enforces non-idempotent start and stop transitions. Returns 406 if invalid.
 pub async fn scan_action(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -139,15 +139,13 @@ pub async fn scan_action(
     };
 
     let new_status = match req.action {
-        ScanAction::Start => match scan.status {
-            ScanStatus::Stored | ScanStatus::Succeeded | ScanStatus::Failed => {
-                ScanStatus::Requested
-            }
-            _ => return StatusCode::NOT_ACCEPTABLE.into_response(),
+        ScanAction::Start => match scan.status.start_command_transition() {
+            Some(status) => status,
+            None => return StatusCode::NOT_ACCEPTABLE.into_response(),
         },
-        ScanAction::Stop => match scan.status {
-            ScanStatus::Requested | ScanStatus::Running => ScanStatus::Stopped,
-            _ => return StatusCode::NOT_ACCEPTABLE.into_response(),
+        ScanAction::Stop => match scan.status.stop_command_transition() {
+            Some(status) => status,
+            None => return StatusCode::NOT_ACCEPTABLE.into_response(),
         },
     };
 
@@ -159,7 +157,7 @@ pub async fn scan_action(
 
 /// DELETE /scans/{id} — Delete a scan and all its results.
 ///
-/// Returns 406 if the scan is Running or Requested (cannot delete active scans).
+/// Returns 406 if the scan is not in `new` or a terminal status.
 pub async fn delete_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -168,7 +166,7 @@ pub async fn delete_scan(
         Ok(s) => s,
         Err(e) => return storage_err(e),
     };
-    if matches!(scan.status, ScanStatus::Running | ScanStatus::Requested) {
+    if !scan.status.can_delete() {
         return StatusCode::NOT_ACCEPTABLE.into_response();
     }
 

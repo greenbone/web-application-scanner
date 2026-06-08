@@ -22,6 +22,8 @@ This plan implements the behavior defined in `doc/specs/scan-module.md` with a n
 
 ## Phase 0: State Model and Contract Alignment
 
+Status: Done (2026-06-08)
+
 First align the scan-domain lifecycle status model and command semantics with the spec.
 
 - Add scan-domain `ScanStatus` in the scan module (for example `src/scan/status.rs`) and replace current lifecycle variants with:
@@ -36,6 +38,12 @@ First align the scan-domain lifecycle status model and command semantics with th
 - Introduce one transition validator in the scan module and remove duplicated state logic from API handlers.
 - Enforce non-idempotent `start_scan` and `stop_scan` behavior through this validator.
 - Keep API response mapping in `src/api/scans.rs`, but move transition decisions and lifecycle typing into scan domain code.
+
+Phase 0 amendments (2026-06-08):
+
+- Implemented the transition validator directly on `ScanStatus` in `src/scan/status.rs` as methods (`start_command_transition`, `stop_command_transition`, `can_delete`) instead of a separate free-function validator in `src/scan/mod.rs`.
+- Updated API handlers to call the scan-domain status methods for transition and delete checks.
+- Moved transition unit tests from `src/scan/mod_tests.rs` to `src/scan/status_tests.rs` and attached them to the status sidecar test module.
 
 ## Phase 1: Scan Service Facade
 

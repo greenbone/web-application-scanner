@@ -14,6 +14,7 @@ pub mod app;
 pub mod config;
 pub mod http;
 pub mod logging;
+pub mod scan;
 pub mod storage;
 pub mod zapclient;
 

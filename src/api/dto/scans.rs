@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::scan::ScanStatus;
+
 /// Request body for POST /scans — Create a new scan.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ScanRequest {
@@ -98,18 +100,6 @@ pub struct Vt {
     /// VT parameters.
     #[serde(default)]
     pub parameters: Vec<Parameter>,
-}
-
-/// Lifecycle phase of a scan, matching the OpenAPI Status.status enum.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ScanStatus {
-    Stored,
-    Requested,
-    Running,
-    Stopped,
-    Failed,
-    Succeeded,
 }
 
 /// Type of a scan result, matching the OpenAPI Result.type enum.

@@ -9,7 +9,10 @@ use sqlx::{
 };
 use std::str::FromStr;
 
-use crate::api::dto::scans::{ResultType, ScanStatus, ScannerPreference, Target, Vt};
+use crate::{
+    api::dto::scans::{ResultType, ScannerPreference, Target, Vt},
+    scan::ScanStatus,
+};
 
 use super::interface::{ResultRecord, ScanRecord, ScanStorage, StorageError};
 
@@ -51,7 +54,7 @@ impl SqliteStorage {
                 target           TEXT    NOT NULL,
                 scan_preferences TEXT    NOT NULL DEFAULT '[]',
                 vts              TEXT    NOT NULL DEFAULT '[]',
-                status           TEXT    NOT NULL DEFAULT 'stored',
+                status           TEXT    NOT NULL DEFAULT 'new',
                 start_time       INTEGER,
                 end_time         INTEGER
             )",
@@ -90,12 +93,22 @@ fn status_to_db(status: &ScanStatus) -> String {
     serde_json::to_value(status)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_else(|| "stored".to_string())
+        .unwrap_or_else(|| "new".to_string())
 }
 
 fn status_from_db(s: &str) -> Result<ScanStatus, StorageError> {
-    serde_json::from_value(serde_json::Value::String(s.to_string()))
-        .map_err(|e| StorageError::Backend(format!("unrecognised scan status '{s}': {e}")))
+    // Backward compatibility with pre-Phase-0 persisted values.
+    let normalized = match s {
+        "stored" => "new",
+        "requested" => "queued",
+        "failed" => "interrupted",
+        "succeeded" => "done",
+        _ => s,
+    };
+
+    serde_json::from_value(serde_json::Value::String(normalized.to_string())).map_err(|e| {
+        StorageError::Backend(format!("unrecognised scan status '{normalized}': {e}"))
+    })
 }
 
 fn result_type_to_db(rt: &ResultType) -> String {
