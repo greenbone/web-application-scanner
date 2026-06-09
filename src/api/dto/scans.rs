@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::scan::ScanStatus;
 
 /// Request body for POST /scans — Create a new scan.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanRequest {
     /// Target hosts to scan.
     pub target: Target,
@@ -21,14 +21,14 @@ pub struct ScanRequest {
 }
 
 /// Request body for POST /scans/{id} — Perform an action on a scan.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanActionRequest {
     /// The action to perform (Start or Stop).
     pub action: ScanAction,
 }
 
 /// Scan action type.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum ScanAction {
     /// Start the scan.
@@ -38,7 +38,7 @@ pub enum ScanAction {
 }
 
 /// Scan target specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Target {
     /// Target hosts to scan.
     pub hosts: Vec<String>,
@@ -51,7 +51,7 @@ pub struct Target {
 }
 
 /// Authentication credential for a service.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Credential {
     /// Service type (must be "http" for web app scans).
     pub service: String,
@@ -62,7 +62,7 @@ pub struct Credential {
 }
 
 /// Username and password credential pair.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UsernamePasswordCredential {
     /// Username for authentication.
     pub username: String,
@@ -75,7 +75,7 @@ pub struct UsernamePasswordCredential {
 }
 
 /// Scanner preference.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScannerPreference {
     /// Preference identifier.
     pub id: String,
@@ -84,7 +84,7 @@ pub struct ScannerPreference {
 }
 
 /// VT parameter.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Parameter {
     /// Parameter identifier.
     pub id: i32,
@@ -93,7 +93,7 @@ pub struct Parameter {
 }
 
 /// Vulnerability test (VT) specification.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Vt {
     /// VT OID (Object Identifier).
     pub oid: String,
@@ -103,7 +103,7 @@ pub struct Vt {
 }
 
 /// Type of a scan result, matching the OpenAPI Result.type enum.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum ResultType {
     Alarm,
@@ -115,18 +115,18 @@ pub enum ResultType {
 }
 
 /// Response body for POST /scans – returns the created scan ID.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanIdResponse {
     /// The UUID of the newly created scan.
     pub id: String,
 }
 
 /// Response body for GET /scans/preferences – available scanner preferences.
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PreferencesResponse {}
 
 /// Response body for GET /scans/{id} – full scan details.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanDetailResponse {
     /// The scan UUID.
     pub scan_id: String,
@@ -139,7 +139,7 @@ pub struct ScanDetailResponse {
 }
 
 /// Response body for GET /scans/{id}/status – scan lifecycle and timing.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ScanStatusResponse {
     /// Current scan status.
     pub status: ScanStatus,
@@ -154,7 +154,7 @@ pub struct ScanStatusResponse {
 /// Response body for GET /scans/{id}/results/{rid} – a single scan result.
 ///
 /// Individual result record with optional fields omitted from JSON serialization.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanResultResponse {
     /// 0-based result index within the scan.
     pub id: i64,
@@ -183,3 +183,7 @@ pub struct ScanResultResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub detail: Option<serde_json::Value>,
 }
+
+#[cfg(test)]
+#[path = "scans_tests.rs"]
+mod tests;
