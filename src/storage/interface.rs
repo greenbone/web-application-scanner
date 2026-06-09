@@ -18,7 +18,7 @@ use crate::{
 /// Full persisted scan record.
 ///
 /// Represents a complete scan request with its associated VTs (vulnerability tests)
-/// and configuration, along with lifecycle timestamps and status.
+/// and configuration, along with lifecycle timestamps, worker metadata, and status.
 #[derive(Debug, Clone)]
 pub struct ScanRecord {
     pub id: String,
@@ -26,8 +26,14 @@ pub struct ScanRecord {
     pub scan_preferences: Vec<ScannerPreference>,
     pub vts: Vec<Vt>,
     pub status: ScanStatus,
+    pub queued_time: Option<i64>,
     pub start_time: Option<i64>,
     pub end_time: Option<i64>,
+    pub context_name: Option<String>,
+    pub context_id: Option<String>,
+    pub alert_cursor: Option<i64>,
+    pub progress: Option<serde_json::Value>,
+    pub interruption_reason: Option<String>,
 }
 
 /// A single persisted result for a scan.
@@ -112,8 +118,37 @@ pub trait ScanStorage: Send + Sync {
     /// Retrieve a scan by its ID.
     async fn get_scan(&self, id: &str) -> Result<ScanRecord, StorageError>;
 
+    /// Retrieve all scans that are not in terminal states.
+    async fn list_non_terminal_scans(&self) -> Result<Vec<ScanRecord>, StorageError>;
+
     /// Overwrite the lifecycle status of a scan.
     async fn update_scan_status(&self, id: &str, status: ScanStatus) -> Result<(), StorageError>;
+
+    /// Overwrite status only when current status matches `expected`.
+    async fn transition_scan_status(
+        &self,
+        id: &str,
+        expected: ScanStatus,
+        new_status: ScanStatus,
+    ) -> Result<(), StorageError>;
+
+    /// Persist runtime progress payload for a scan.
+    async fn update_scan_progress(
+        &self,
+        id: &str,
+        progress: Option<serde_json::Value>,
+    ) -> Result<(), StorageError>;
+
+    /// Persist ZAP context metadata for a scan.
+    async fn update_scan_context(
+        &self,
+        id: &str,
+        context_name: Option<String>,
+        context_id: Option<String>,
+    ) -> Result<(), StorageError>;
+
+    /// Persist updated alert cursor for a scan.
+    async fn update_alert_cursor(&self, id: &str, alert_cursor: Option<i64>) -> Result<(), StorageError>;
 
     /// Delete a scan and all of its results.
     async fn delete_scan(&self, id: &str) -> Result<(), StorageError>;
@@ -121,6 +156,9 @@ pub trait ScanStorage: Send + Sync {
     /// Append a result to a scan. The `id` field in `result` is ignored; the
     /// backend assigns the next 0-based auto-incremented index.
     async fn add_result(&self, scan_id: &str, result: ResultRecord) -> Result<(), StorageError>;
+
+    /// Append multiple results to a scan in one transaction.
+    async fn add_results(&self, scan_id: &str, results: Vec<ResultRecord>) -> Result<(), StorageError>;
 
     /// Retrieve a single result by its 0-based index within the scan.
     async fn get_result(&self, scan_id: &str, result_id: i64)
