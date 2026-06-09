@@ -706,4 +706,4 @@ fn result_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ResultRecord, Storag
 
 #[cfg(test)]
 #[path = "sqlite_tests.rs"]
-mod tests;
+mod sqlite_tests;
