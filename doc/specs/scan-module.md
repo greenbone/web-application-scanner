@@ -133,6 +133,27 @@ The alert cursor must only be advanced after successful commit of the correspond
 
 When all active scans are finished and all alerts are fetched, the ZAP context is removed and the scan status is set to `done`. Failure to remove the context will not alter the status.
 
+### ZAP alert to scan result mapping
+
+Each fetched ZAP alert produces exactly one persisted scan result.
+
+The mapping is defined as follows:
+
+| ZAP alert field or condition | Scan result field | Mapping rule |
+| --- | --- | --- |
+| `risk = Informational` | `type` | Map to `log`. |
+| `risk = Low`, `Medium`, `High`, or `Unknown` | `type` | Map to `alarm`. |
+| `plugin_id` | `oid` | Copy the ZAP plugin ID verbatim. |
+| `name`, `risk`, `url`, `description` | `message` | Format as `<name> (<risk>) at <url>` and append `\n<description>` when the description is non-empty. |
+| parsed `url.host()` | `hostname` | Copy the parsed host name when the alert URL is a valid absolute URL. Otherwise store `null`. |
+| parsed `url.port_or_known_default()` | `port` | Copy the explicit port, or the scheme default (`80` for HTTP, `443` for HTTPS). If the URL cannot be parsed, store `null`. |
+| parsed URL scheme `http` or `https` | `protocol` | Store `tcp`. If the URL cannot be parsed, store `null`. |
+| `url` | `ip_address` | Due to limitations of the scanner API, the `ip_address` field is used as a general main location identifier, so insert the URL here. |
+| all current ZAP alert fields | `detail` | Store `null` for alert-derived results to remain aligned with the current OpenAPI contract, which reserves `detail` for `host_detail` results. |
+
+This keeps alert conversion deterministic and compatible with the current public result schema while still preserving the essential ZAP finding data in `type`, `oid`, `hostname`, `port`, `protocol`, and `message`.
+
+
 ### Scan stop
 
 Scans with a given id can be stopped with the `stop_scan` command if they have the `queued` or `running` status.
@@ -215,6 +236,7 @@ The following must be covered by unit tests using a mock ZAP client and in-memor
 - All invalid state transition attempts (must return an error).
 - Error paths that result in `interrupted` status.
 - Startup recovery: non-terminal scans are set to `interrupted` on service restart.
+- Alert-to-result mapping, including `Informational -> log`, all other alert risk levels -> `alarm`, URL-derived host and port extraction, and invalid alert URL fallback behavior.
 
 ## Notes and open questions
 
