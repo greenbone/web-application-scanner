@@ -79,6 +79,8 @@ Phase 1 amendments (2026-06-08):
 
 ## Phase 2: Storage Model Extensions and Atomic Updates
 
+Status: Done (2026-06-09)
+
 Add persistence support for runtime worker state and safe transitions.
 
 - Extend persisted scan record fields to include:
@@ -99,6 +101,14 @@ Add persistence support for runtime worker state and safe transitions.
   - listing scans in non-terminal states (startup recovery)
 - Use SQL transactions for all state + progress changes done together.
 - Keep existing results storage behavior and retain partial results for stopped/interrupted scans.
+
+Phase 2 amendments (2026-06-08):
+
+- Extended `ScanRecord` persistence model with context metadata, queue/runtime timestamps, alert cursor, progress payload, and interruption reason.
+- Added storage operations for compare-and-swap status transitions, progress updates, context metadata updates, alert cursor updates, batch result persistence, and listing non-terminal scans.
+- SQLite schema migrations for newly added scan columns are out of scope for now.
+- Phase 2 assumes a fresh SQLite database, or manual schema recreation, when these columns are introduced.
+- Implemented batch result writes (`add_results`) in a single SQL transaction and retained existing single-result behavior via delegation.
 
 ## Phase 3: Queue and Worker Runtime
 
@@ -253,3 +263,4 @@ Before opening the implementation PR:
 - No advanced worker resource scheduling (RAM/CPU-based) in this phase.
 - No multi-instance distributed queue coordination in this phase.
 - No switch to per-scan dedicated ZAP instance in this phase.
+- No backward-compatible SQLite schema migration path in this phase.

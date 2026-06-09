@@ -34,8 +34,14 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
         scan_preferences: vec![],
         vts: vec![],
         status,
+        queued_time: None,
         start_time: None,
         end_time: None,
+        context_name: None,
+        context_id: None,
+        alert_cursor: None,
+        progress: None,
+        interruption_reason: None,
     }
 }
 

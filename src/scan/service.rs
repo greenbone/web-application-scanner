@@ -90,8 +90,14 @@ impl ScanService for DefaultScanService {
             scan_preferences: request.scan_preferences,
             vts: request.vts,
             status: ScanStatus::New,
+            queued_time: None,
             start_time: None,
             end_time: None,
+            context_name: None,
+            context_id: None,
+            alert_cursor: None,
+            progress: None,
+            interruption_reason: None,
         };
 
         self.storage

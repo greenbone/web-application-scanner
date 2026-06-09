@@ -55,8 +55,14 @@ impl SqliteStorage {
                 scan_preferences TEXT    NOT NULL DEFAULT '[]',
                 vts              TEXT    NOT NULL DEFAULT '[]',
                 status           TEXT    NOT NULL DEFAULT 'new',
+                queued_time      INTEGER,
                 start_time       INTEGER,
-                end_time         INTEGER
+                end_time         INTEGER,
+                context_name     TEXT,
+                context_id       TEXT,
+                alert_cursor     INTEGER,
+                progress         TEXT,
+                interruption_reason TEXT
             )",
         )
         .execute(&self.pool)
@@ -155,6 +161,16 @@ fn detail_from_db(s: Option<&str>) -> Option<serde_json::Value> {
     s.and_then(|v| serde_json::from_str(v).ok())
 }
 
+fn progress_to_db(progress: &Option<serde_json::Value>) -> Option<String> {
+    progress
+        .as_ref()
+        .and_then(|value| serde_json::to_string(value).ok())
+}
+
+fn progress_from_db(s: Option<&str>) -> Option<serde_json::Value> {
+    s.and_then(|value| serde_json::from_str(value).ok())
+}
+
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
 #[async_trait]
@@ -164,18 +180,28 @@ impl ScanStorage for SqliteStorage {
         let prefs_json = prefs_to_db(&scan.scan_preferences)?;
         let vts_json = vts_to_db(&scan.vts)?;
         let status_str = status_to_db(&scan.status);
+        let progress_json = progress_to_db(&scan.progress);
 
         sqlx::query(
-            "INSERT INTO scans (id, target, scan_preferences, vts, status, start_time, end_time)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO scans (
+                id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                context_name, context_id, alert_cursor, progress, interruption_reason
+             )
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&scan.id)
         .bind(&target_json)
         .bind(&prefs_json)
         .bind(&vts_json)
         .bind(&status_str)
+        .bind(scan.queued_time)
         .bind(scan.start_time)
         .bind(scan.end_time)
+        .bind(&scan.context_name)
+        .bind(&scan.context_id)
+        .bind(scan.alert_cursor)
+        .bind(progress_json.as_deref())
+        .bind(&scan.interruption_reason)
         .execute(&self.pool)
         .await
         .map_err(|e| match e {
@@ -192,7 +218,8 @@ impl ScanStorage for SqliteStorage {
 
     async fn get_scan(&self, id: &str) -> Result<ScanRecord, StorageError> {
         let row = sqlx::query(
-            "SELECT id, target, scan_preferences, vts, status, start_time, end_time
+            "SELECT id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                    context_name, context_id, alert_cursor, progress, interruption_reason
              FROM scans WHERE id = ?",
         )
         .bind(id)
@@ -202,6 +229,21 @@ impl ScanStorage for SqliteStorage {
         .ok_or_else(|| StorageError::NotFound(id.to_string()))?;
 
         scan_from_row(&row)
+    }
+
+    async fn list_non_terminal_scans(&self) -> Result<Vec<ScanRecord>, StorageError> {
+        let rows = sqlx::query(
+            "SELECT id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                    context_name, context_id, alert_cursor, progress, interruption_reason
+             FROM scans
+             WHERE status NOT IN ('done', 'stopped', 'interrupted')
+             ORDER BY id ASC",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        rows.iter().map(scan_from_row).collect()
     }
 
     async fn update_scan_status(&self, id: &str, status: ScanStatus) -> Result<(), StorageError> {
@@ -219,6 +261,129 @@ impl ScanStorage for SqliteStorage {
         Ok(())
     }
 
+    async fn transition_scan_status(
+        &self,
+        id: &str,
+        expected: ScanStatus,
+        new_status: ScanStatus,
+    ) -> Result<(), StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        let result = sqlx::query("UPDATE scans SET status = ? WHERE id = ? AND status = ?")
+            .bind(status_to_db(&new_status))
+            .bind(id)
+            .bind(status_to_db(&expected))
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM scans WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+            tx.rollback().await.ok();
+
+            if exists.is_some() {
+                return Err(StorageError::InvalidState);
+            }
+            return Err(StorageError::NotFound(id.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))
+    }
+
+    async fn update_scan_progress(
+        &self,
+        id: &str,
+        progress: Option<serde_json::Value>,
+    ) -> Result<(), StorageError> {
+        let progress_json = progress_to_db(&progress);
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        let result = sqlx::query("UPDATE scans SET progress = ? WHERE id = ?")
+            .bind(progress_json.as_deref())
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            tx.rollback().await.ok();
+            return Err(StorageError::NotFound(id.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))
+    }
+
+    async fn update_scan_context(
+        &self,
+        id: &str,
+        context_name: Option<String>,
+        context_id: Option<String>,
+    ) -> Result<(), StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        let result = sqlx::query("UPDATE scans SET context_name = ?, context_id = ? WHERE id = ?")
+            .bind(&context_name)
+            .bind(&context_id)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            tx.rollback().await.ok();
+            return Err(StorageError::NotFound(id.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))
+    }
+
+    async fn update_alert_cursor(&self, id: &str, alert_cursor: Option<i64>) -> Result<(), StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        let result = sqlx::query("UPDATE scans SET alert_cursor = ? WHERE id = ?")
+            .bind(alert_cursor)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            tx.rollback().await.ok();
+            return Err(StorageError::NotFound(id.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))
+    }
+
     async fn delete_scan(&self, id: &str) -> Result<(), StorageError> {
         let result = sqlx::query("DELETE FROM scans WHERE id = ?")
             .bind(id)
@@ -233,42 +398,59 @@ impl ScanStorage for SqliteStorage {
     }
 
     async fn add_result(&self, scan_id: &str, result: ResultRecord) -> Result<(), StorageError> {
+        self.add_results(scan_id, vec![result]).await
+    }
+
+    async fn add_results(&self, scan_id: &str, results: Vec<ResultRecord>) -> Result<(), StorageError> {
         // Verify scan exists first.
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM scans WHERE id = ?")
             .bind(scan_id)
-            .fetch_one(&self.pool)
+            .fetch_one(&mut *tx)
             .await
             .map_err(|e| StorageError::Backend(e.to_string()))?;
 
         if count == 0 {
+            tx.rollback().await.ok();
             return Err(StorageError::NotFound(scan_id.to_string()));
         }
 
-        let rt_str = result_type_to_db(&result.result_type);
-        let detail_str = detail_to_db(&result.detail);
+        for result in results {
+            let rt_str = result_type_to_db(&result.result_type);
+            let detail_str = detail_to_db(&result.detail);
 
-        // The result id is auto-assigned as (MAX(id)+1) within the scan, starting at 0.
-        sqlx::query(
-            "INSERT INTO scan_results
-                (id, scan_id, result_type, ip_address, hostname, oid, port, protocol, message, detail)
-             VALUES (
-                (SELECT COALESCE(MAX(id) + 1, 0) FROM scan_results WHERE scan_id = ?),
-                ?, ?, ?, ?, ?, ?, ?, ?, ?
-             )",
-        )
-        .bind(scan_id)
-        .bind(scan_id)
-        .bind(&rt_str)
-        .bind(&result.ip_address)
-        .bind(&result.hostname)
-        .bind(&result.oid)
-        .bind(result.port)
-        .bind(&result.protocol)
-        .bind(&result.message)
-        .bind(detail_str.as_deref())
-        .execute(&self.pool)
-        .await
-        .map_err(|e| StorageError::Backend(e.to_string()))?;
+            // The result id is auto-assigned as (MAX(id)+1) within the scan, starting at 0.
+            sqlx::query(
+                "INSERT INTO scan_results
+                    (id, scan_id, result_type, ip_address, hostname, oid, port, protocol, message, detail)
+                 VALUES (
+                    (SELECT COALESCE(MAX(id) + 1, 0) FROM scan_results WHERE scan_id = ?),
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?
+                 )",
+            )
+            .bind(scan_id)
+            .bind(scan_id)
+            .bind(&rt_str)
+            .bind(&result.ip_address)
+            .bind(&result.hostname)
+            .bind(&result.oid)
+            .bind(result.port)
+            .bind(&result.protocol)
+            .bind(&result.message)
+            .bind(detail_str.as_deref())
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
 
         Ok(())
     }
@@ -350,11 +532,29 @@ fn scan_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScanRecord, StorageErr
     let status_str: String = row
         .try_get("status")
         .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let queued_time: Option<i64> = row
+        .try_get("queued_time")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
     let start_time: Option<i64> = row
         .try_get("start_time")
         .map_err(|e| StorageError::Backend(e.to_string()))?;
     let end_time: Option<i64> = row
         .try_get("end_time")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let context_name: Option<String> = row
+        .try_get("context_name")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let context_id: Option<String> = row
+        .try_get("context_id")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let alert_cursor: Option<i64> = row
+        .try_get("alert_cursor")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let progress: Option<String> = row
+        .try_get("progress")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let interruption_reason: Option<String> = row
+        .try_get("interruption_reason")
         .map_err(|e| StorageError::Backend(e.to_string()))?;
 
     Ok(ScanRecord {
@@ -363,8 +563,14 @@ fn scan_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScanRecord, StorageErr
         scan_preferences: prefs_from_db(&prefs_json)?,
         vts: vts_from_db(&vts_json)?,
         status: status_from_db(&status_str)?,
+        queued_time,
         start_time,
         end_time,
+        context_name,
+        context_id,
+        alert_cursor,
+        progress: progress_from_db(progress.as_deref()),
+        interruption_reason,
     })
 }
 
