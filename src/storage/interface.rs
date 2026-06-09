@@ -194,4 +194,4 @@ pub trait ScanStorage: Send + Sync {
 
 #[cfg(test)]
 #[path = "interface_tests.rs"]
-mod tests;
+mod interface_tests;
