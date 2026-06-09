@@ -96,6 +96,12 @@ for asset in assets:
         continue
     if not re.search(arch_pattern, lowered):
         continue
+    digest = asset.get("digest") or ""
+    digest_match = re.fullmatch(r"sha256:([a-fA-F0-9]{64})", digest.strip())
+    if digest_match is not None:
+        matches.append((name, url, "asset-digest", digest_match.group(1).lower()))
+        continue
+
     checksum_names = [
         f"{name}.sha256",
         f"{name}.sha256sum",
@@ -112,15 +118,40 @@ for asset in assets:
 
 if not matches:
     print(
-        "error: no scannerctl release asset with a sha256 checksum matched this host. Available assets:",
+        "error: no scannerctl release asset with a SHA-256 digest or checksum matched this host. Available assets:",
         file=sys.stderr,
     )
     for asset in assets:
         print(f"  - {asset.get('name', '<unnamed>')}", file=sys.stderr)
     sys.exit(1)
 
-name, url, checksum_name, checksum_url = sorted(matches)[0]
-print(f"{url}\t{name}\t{checksum_url}\t{checksum_name}")
+name, url, checksum_name, checksum_value = sorted(matches)[0]
+print(f"{url}\t{name}\t{checksum_name}\t{checksum_value}")
+PY
+}
+
+verify_asset_digest() {
+  local asset_path="$1"
+  local expected="$2"
+
+  python3 - "$asset_path" "$expected" <<'PY'
+import hashlib
+import sys
+
+asset_path, expected = sys.argv[1:]
+expected = expected.lower()
+sha256 = hashlib.sha256()
+with open(asset_path, "rb") as handle:
+    for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+        sha256.update(chunk)
+actual = sha256.hexdigest()
+
+if actual != expected:
+    print(
+        f"error: scannerctl checksum mismatch: expected {expected}, got {actual}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 PY
 }
 
@@ -203,7 +234,7 @@ install_scannerctl_from_asset() {
 }
 
 download_scannerctl() {
-  local release_json asset_info asset_url asset_name checksum_url checksum_name asset_path checksum_path unpack_dir
+  local release_json asset_info asset_url asset_name checksum_name checksum_value asset_path checksum_path unpack_dir
 
   if [[ -x "$SCANNERCTL" ]]; then
     log "using existing scannerctl at $SCANNERCTL"
@@ -221,12 +252,16 @@ download_scannerctl() {
   curl -fsSL "$OPENVAS_RELEASE_API" -o "$release_json"
 
   asset_info="$(select_scannerctl_asset "$release_json")"
-  IFS=$'\t' read -r asset_url asset_name checksum_url checksum_name <<<"$asset_info"
+  IFS=$'\t' read -r asset_url asset_name checksum_name checksum_value <<<"$asset_info"
 
   log "downloading $asset_name to $SCANNERCTL"
   curl -fL "$asset_url" -o "$asset_path"
-  curl -fL "$checksum_url" -o "$checksum_path"
-  verify_asset_checksum "$asset_path" "$checksum_path" "$checksum_name"
+  if [[ "$checksum_name" == "asset-digest" ]]; then
+    verify_asset_digest "$asset_path" "$checksum_value"
+  else
+    curl -fL "$checksum_value" -o "$checksum_path"
+    verify_asset_checksum "$asset_path" "$checksum_path" "$checksum_name"
+  fi
   install_scannerctl_from_asset "$asset_path" "$asset_name" "$unpack_dir"
   rm -f "$release_json" "$asset_path" "$checksum_path"
   rm -rf "$unpack_dir"
