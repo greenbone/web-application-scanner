@@ -210,7 +210,10 @@ async fn get_scan_result_for_missing_index_forwards_storage_error() {
         .unwrap();
     let service = DefaultScanService::new(storage);
 
-    let err = service.get_scan_result("scan-result-miss", 5).await.unwrap_err();
+    let err = service
+        .get_scan_result("scan-result-miss", 5)
+        .await
+        .unwrap_err();
 
     assert!(matches!(
         err,

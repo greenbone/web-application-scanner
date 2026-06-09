@@ -35,8 +35,11 @@ pub trait ScanService: Send + Sync {
 
     async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError>;
 
-    async fn get_scan_result(&self, id: &str, result_id: i64)
-    -> Result<ResultRecord, ScanServiceError>;
+    async fn get_scan_result(
+        &self,
+        id: &str,
+        result_id: i64,
+    ) -> Result<ResultRecord, ScanServiceError>;
 
     async fn get_scan_status(
         &self,
@@ -109,7 +112,10 @@ impl ScanService for DefaultScanService {
     }
 
     async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError> {
-        self.storage.get_scan(id).await.map_err(Self::map_storage_err)
+        self.storage
+            .get_scan(id)
+            .await
+            .map_err(Self::map_storage_err)
     }
 
     async fn get_scan_result(
@@ -141,13 +147,13 @@ impl ScanService for DefaultScanService {
             .await
             .map_err(Self::map_storage_err)?;
 
-        let new_status = scan
-            .status
-            .start_command_transition()
-            .ok_or(ScanServiceError::InvalidTransition {
-                from: scan.status,
-                requested: ScanStatus::Queued,
-            })?;
+        let new_status =
+            scan.status
+                .start_command_transition()
+                .ok_or(ScanServiceError::InvalidTransition {
+                    from: scan.status,
+                    requested: ScanStatus::Queued,
+                })?;
 
         self.storage
             .update_scan_status(id, new_status)
@@ -168,13 +174,13 @@ impl ScanService for DefaultScanService {
             ScanStatus::Stopped
         };
 
-        let new_status = scan
-            .status
-            .stop_command_transition()
-            .ok_or(ScanServiceError::InvalidTransition {
-                from: scan.status,
-                requested,
-            })?;
+        let new_status =
+            scan.status
+                .stop_command_transition()
+                .ok_or(ScanServiceError::InvalidTransition {
+                    from: scan.status,
+                    requested,
+                })?;
 
         self.storage
             .update_scan_status(id, new_status)
@@ -196,7 +202,10 @@ impl ScanService for DefaultScanService {
             });
         }
 
-        self.storage.delete_scan(id).await.map_err(Self::map_storage_err)
+        self.storage
+            .delete_scan(id)
+            .await
+            .map_err(Self::map_storage_err)
     }
 
     async fn get_results(

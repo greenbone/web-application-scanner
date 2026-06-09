@@ -148,7 +148,11 @@ pub trait ScanStorage: Send + Sync {
     ) -> Result<(), StorageError>;
 
     /// Persist updated alert cursor for a scan.
-    async fn update_alert_cursor(&self, id: &str, alert_cursor: Option<i64>) -> Result<(), StorageError>;
+    async fn update_alert_cursor(
+        &self,
+        id: &str,
+        alert_cursor: Option<i64>,
+    ) -> Result<(), StorageError>;
 
     /// Delete a scan and all of its results.
     async fn delete_scan(&self, id: &str) -> Result<(), StorageError>;
@@ -158,7 +162,11 @@ pub trait ScanStorage: Send + Sync {
     async fn add_result(&self, scan_id: &str, result: ResultRecord) -> Result<(), StorageError>;
 
     /// Append multiple results to a scan in one transaction.
-    async fn add_results(&self, scan_id: &str, results: Vec<ResultRecord>) -> Result<(), StorageError>;
+    async fn add_results(
+        &self,
+        scan_id: &str,
+        results: Vec<ResultRecord>,
+    ) -> Result<(), StorageError>;
 
     /// Retrieve a single result by its 0-based index within the scan.
     async fn get_result(&self, scan_id: &str, result_id: i64)
