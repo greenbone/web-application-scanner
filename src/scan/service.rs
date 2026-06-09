@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     api::dto::scans::{PreferencesResponse, ScannerPreference, Target, Vt},
-    scan::{ScanServiceError, ScanStatus},
+    scan::{ScanRuntimeHandle, ScanServiceError, ScanStatus},
     storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
 };
 
@@ -64,11 +64,22 @@ pub trait ScanService: Send + Sync {
 #[derive(Clone)]
 pub struct DefaultScanService {
     storage: StorageHandle,
+    runtime: Option<ScanRuntimeHandle>,
 }
 
 impl DefaultScanService {
-    pub fn new(storage: StorageHandle) -> Self {
-        Self { storage }
+    pub fn new_storage_only(storage: StorageHandle) -> Self {
+        Self {
+            storage,
+            runtime: None,
+        }
+    }
+
+    pub fn new(storage: StorageHandle, runtime: ScanRuntimeHandle) -> Self {
+        Self {
+            storage,
+            runtime: Some(runtime),
+        }
     }
 
     fn map_storage_err(err: StorageError) -> ScanServiceError {
@@ -156,9 +167,15 @@ impl ScanService for DefaultScanService {
                 })?;
 
         self.storage
-            .update_scan_status(id, new_status)
+            .transition_scan_status(id, scan.status, new_status)
             .await
-            .map_err(Self::map_storage_err)
+            .map_err(Self::map_storage_err)?;
+
+        if let Some(runtime) = &self.runtime {
+            runtime.enqueue(id.to_string()).await;
+        }
+
+        Ok(())
     }
 
     async fn stop_scan(&self, id: &str) -> Result<(), ScanServiceError> {
@@ -182,8 +199,14 @@ impl ScanService for DefaultScanService {
                     requested,
                 })?;
 
+        if scan.status == ScanStatus::Queued {
+            if let Some(runtime) = &self.runtime {
+                runtime.remove_queued(id).await;
+            }
+        }
+
         self.storage
-            .update_scan_status(id, new_status)
+            .transition_scan_status(id, scan.status, new_status)
             .await
             .map_err(Self::map_storage_err)
     }

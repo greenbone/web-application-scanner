@@ -29,6 +29,12 @@ pub const DEFAULT_ZAP_BASE_URL: &str = "http://127.0.0.1:8547";
 /// Default ZAP API key.
 pub const DEFAULT_ZAP_API_KEY: &str = "test-api-key";
 
+/// Default number of concurrent scan workers.
+pub const DEFAULT_SCAN_WORKER_COUNT: usize = 1;
+
+/// Default alert polling interval in seconds.
+pub const DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS: u64 = 10;
+
 /// Runtime selection of the storage backend.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StorageBackend {
@@ -52,6 +58,10 @@ pub struct Settings {
     pub zap_base_url: String,
     /// API key used for authenticated ZAP API calls.
     pub zap_api_key: String,
+    /// Maximum number of concurrently running scan workers.
+    pub scan_worker_count: usize,
+    /// Interval in seconds between alert polling attempts during active scans.
+    pub scan_alert_poll_interval_seconds: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -63,6 +73,8 @@ struct RawSettings {
     sqlite_url: String,
     zap_base_url: String,
     zap_api_key: String,
+    scan_worker_count: usize,
+    scan_alert_poll_interval_seconds: u64,
 }
 
 impl Settings {
@@ -90,7 +102,12 @@ impl Settings {
             .set_default("storage_backend", DEFAULT_STORAGE_BACKEND)?
             .set_default("sqlite_url", DEFAULT_SQLITE_URL)?
             .set_default("zap_base_url", DEFAULT_ZAP_BASE_URL)?
-            .set_default("zap_api_key", DEFAULT_ZAP_API_KEY)
+            .set_default("zap_api_key", DEFAULT_ZAP_API_KEY)?
+            .set_default("scan_worker_count", DEFAULT_SCAN_WORKER_COUNT as i64)?
+            .set_default(
+                "scan_alert_poll_interval_seconds",
+                DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS,
+            )
     }
 
     /// Validate and convert raw settings into typed `Settings`.
@@ -98,6 +115,18 @@ impl Settings {
         if raw.port == 0 {
             return Err(ConfigError::Message(
                 "port must be between 1 and 65535".to_string(),
+            ));
+        }
+
+        if raw.scan_worker_count == 0 {
+            return Err(ConfigError::Message(
+                "scan_worker_count must be greater than 0".to_string(),
+            ));
+        }
+
+        if raw.scan_alert_poll_interval_seconds == 0 {
+            return Err(ConfigError::Message(
+                "scan_alert_poll_interval_seconds must be greater than 0".to_string(),
             ));
         }
 
@@ -131,6 +160,8 @@ impl Settings {
             sqlite_url,
             zap_base_url: raw.zap_base_url,
             zap_api_key: raw.zap_api_key,
+            scan_worker_count: raw.scan_worker_count,
+            scan_alert_poll_interval_seconds: raw.scan_alert_poll_interval_seconds,
         })
     }
 }

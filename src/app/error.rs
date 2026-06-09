@@ -20,4 +20,7 @@ pub enum AppError {
 
     #[error("HTTP server failed: {0}")]
     Server(#[source] std::io::Error),
+
+    #[error("failed to initialize scan runtime: {0}")]
+    Runtime(String),
 }
