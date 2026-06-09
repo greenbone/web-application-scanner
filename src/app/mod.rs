@@ -6,8 +6,8 @@
 
 pub mod error;
 
-use crate::storage::StorageHandle;
 use crate::scan::ScanServiceHandle;
+use crate::storage::StorageHandle;
 
 /// Application state injected into every Axum route handler.
 ///

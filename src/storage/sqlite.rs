@@ -112,9 +112,8 @@ fn status_from_db(s: &str) -> Result<ScanStatus, StorageError> {
         _ => s,
     };
 
-    serde_json::from_value(serde_json::Value::String(normalized.to_string())).map_err(|e| {
-        StorageError::Backend(format!("unrecognised scan status '{normalized}': {e}"))
-    })
+    serde_json::from_value(serde_json::Value::String(normalized.to_string()))
+        .map_err(|e| StorageError::Backend(format!("unrecognised scan status '{normalized}': {e}")))
 }
 
 fn result_type_to_db(rt: &ResultType) -> String {
@@ -360,7 +359,11 @@ impl ScanStorage for SqliteStorage {
             .map_err(|e| StorageError::Backend(e.to_string()))
     }
 
-    async fn update_alert_cursor(&self, id: &str, alert_cursor: Option<i64>) -> Result<(), StorageError> {
+    async fn update_alert_cursor(
+        &self,
+        id: &str,
+        alert_cursor: Option<i64>,
+    ) -> Result<(), StorageError> {
         let mut tx = self
             .pool
             .begin()
@@ -401,7 +404,11 @@ impl ScanStorage for SqliteStorage {
         self.add_results(scan_id, vec![result]).await
     }
 
-    async fn add_results(&self, scan_id: &str, results: Vec<ResultRecord>) -> Result<(), StorageError> {
+    async fn add_results(
+        &self,
+        scan_id: &str,
+        results: Vec<ResultRecord>,
+    ) -> Result<(), StorageError> {
         // Verify scan exists first.
         let mut tx = self
             .pool

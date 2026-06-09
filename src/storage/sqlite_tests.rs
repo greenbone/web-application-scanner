@@ -132,7 +132,10 @@ async fn update_scan_context_progress_and_cursor_roundtrip() {
     assert_eq!(scan.context_name.as_deref(), Some("greenbone-was-meta"));
     assert_eq!(scan.context_id.as_deref(), Some("ctx-1"));
     assert_eq!(scan.alert_cursor, Some(7));
-    assert_eq!(scan.progress, Some(serde_json::json!({"overall": 42, "targets": []})));
+    assert_eq!(
+        scan.progress,
+        Some(serde_json::json!({"overall": 42, "targets": []}))
+    );
 }
 
 #[tokio::test]
