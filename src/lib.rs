@@ -23,8 +23,9 @@ use std::sync::Arc;
 use crate::{
     app::{AppState, error::AppError},
     config::settings::Settings,
-    scan::{DefaultScanService, ScanServiceHandle},
+    scan::{DefaultScanService, ScanRuntimeConfig, ScanServiceHandle, start_scan_runtime},
     storage::sqlite::SqliteStorage,
+    zapclient::ZapClient,
 };
 
 use tracing::info;
@@ -41,7 +42,23 @@ pub async fn run() -> Result<(), AppError> {
             .await
             .map_err(|e| AppError::Storage(e.to_string()))?,
     );
-    let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(storage.clone()));
+    let zap_client =
+        ZapClient::from_settings(&settings).map_err(|e| AppError::Runtime(e.to_string()))?;
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: settings.scan_worker_count,
+            alert_poll_interval: std::time::Duration::from_secs(
+                settings.scan_alert_poll_interval_seconds,
+            ),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(
+        storage.clone(),
+        runtime,
+    ));
 
     let state = AppState::new(storage, scan_service);
     let router = http::router::build_router(state);

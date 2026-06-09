@@ -48,7 +48,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
 #[tokio::test]
 async fn create_scan_persists_new_status() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
-    let service = DefaultScanService::new(storage.clone());
+    let service = DefaultScanService::new_storage_only(storage.clone());
 
     let scan_id = service.create_scan(make_request()).await.unwrap();
     let persisted = storage.get_scan(&scan_id).await.unwrap();
@@ -64,7 +64,7 @@ async fn start_scan_transitions_new_to_queued() {
         .create_scan(make_scan("start-scan", ScanStatus::New))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage.clone());
+    let service = DefaultScanService::new_storage_only(storage.clone());
 
     service.start_scan("start-scan").await.unwrap();
 
@@ -79,7 +79,7 @@ async fn start_scan_returns_invalid_transition_for_non_new_scans() {
         .create_scan(make_scan("done-scan", ScanStatus::Done))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let err = service.start_scan("done-scan").await.unwrap_err();
 
@@ -99,7 +99,7 @@ async fn stop_scan_transitions_queued_to_stopped() {
         .create_scan(make_scan("queued-scan", ScanStatus::Queued))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage.clone());
+    let service = DefaultScanService::new_storage_only(storage.clone());
 
     service.stop_scan("queued-scan").await.unwrap();
 
@@ -114,7 +114,7 @@ async fn stop_scan_transitions_running_to_stop_requested() {
         .create_scan(make_scan("running-scan", ScanStatus::Running))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage.clone());
+    let service = DefaultScanService::new_storage_only(storage.clone());
 
     service.stop_scan("running-scan").await.unwrap();
 
@@ -129,7 +129,7 @@ async fn delete_scan_rejects_non_deletable_states() {
         .create_scan(make_scan("queued-delete", ScanStatus::Queued))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let err = service.delete_scan("queued-delete").await.unwrap_err();
 
@@ -149,7 +149,7 @@ async fn get_scan_returns_full_scan_record() {
         .create_scan(make_scan("scan-read", ScanStatus::New))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let scan = service.get_scan("scan-read").await.unwrap();
 
@@ -161,7 +161,7 @@ async fn get_scan_returns_full_scan_record() {
 #[tokio::test]
 async fn get_scan_maps_missing_scan_to_scan_not_found() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let err = service.get_scan("missing-scan").await.unwrap_err();
 
@@ -193,7 +193,7 @@ async fn get_scan_result_returns_persisted_result() {
         )
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let result = service.get_scan_result("scan-result", 0).await.unwrap();
 
@@ -208,7 +208,7 @@ async fn get_scan_result_for_missing_index_forwards_storage_error() {
         .create_scan(make_scan("scan-result-miss", ScanStatus::New))
         .await
         .unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let err = service
         .get_scan_result("scan-result-miss", 5)
@@ -228,7 +228,7 @@ async fn get_scan_status_returns_status_and_timestamps() {
     scan.start_time = Some(100);
     scan.end_time = Some(120);
     storage.create_scan(scan).await.unwrap();
-    let service = DefaultScanService::new(storage);
+    let service = DefaultScanService::new_storage_only(storage);
 
     let (status, start_time, end_time) = service.get_scan_status("scan-status").await.unwrap();
 

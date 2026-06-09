@@ -70,7 +70,8 @@ mod tests {
     #[tokio::test]
     async fn build_router_accepts_all_route_patterns() {
         let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
-        let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(storage.clone()));
+        let scan_service: ScanServiceHandle =
+            Arc::new(DefaultScanService::new_storage_only(storage.clone()));
         let state = AppState::new(storage, scan_service);
 
         let _router = build_router(state);

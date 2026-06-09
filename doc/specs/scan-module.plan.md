@@ -112,6 +112,8 @@ Phase 2 amendments (2026-06-08):
 
 ## Phase 3: Queue and Worker Runtime
 
+Status: Done (2026-06-09)
+
 Implement asynchronous execution with FIFO queue and configurable worker count.
 
 - Add FIFO queue abstraction with:
