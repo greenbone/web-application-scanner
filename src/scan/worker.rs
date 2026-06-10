@@ -15,7 +15,11 @@ use tracing::{debug, error, warn};
 
 use crate::{
     api::dto::scans::ResultType,
-    scan::{ScanProgress, ScanStatus, queue::ScanQueue},
+    scan::{
+        ScanProgress, ScanStatus,
+        observability::{emit_queue_wait_telemetry, emit_status_transition},
+        queue::ScanQueue,
+    },
     storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
     zapclient::{
         ZapClient,
@@ -130,6 +134,10 @@ impl ScanWorker {
         }
 
         let scan = self.storage.get_scan(scan_id).await?;
+        emit_status_transition(scan_id, ScanStatus::Queued, ScanStatus::Running);
+        if let (Some(queued_time), Some(start_time)) = (scan.queued_time, scan.start_time) {
+            emit_queue_wait_telemetry(scan_id, queued_time, start_time);
+        }
         match self.execute_scan(&scan).await {
             Ok(()) => Ok(()),
             Err(error) => {
@@ -211,6 +219,7 @@ impl ScanWorker {
         }
 
         self.storage.update_scan_status(&scan.id, ScanStatus::Done).await?;
+        emit_status_transition(&scan.id, ScanStatus::Running, ScanStatus::Done);
         Ok(())
     }
 
@@ -300,8 +309,14 @@ impl ScanWorker {
             }
         }
 
-        if let Err(error) = self.storage.update_scan_status(scan_id, ScanStatus::Interrupted).await {
+        if let Err(error) = self
+            .storage
+            .update_scan_status(scan_id, ScanStatus::Interrupted)
+            .await
+        {
             warn!(scan_id, error = %error, "failed to transition scan to interrupted state");
+        } else {
+            emit_status_transition(scan_id, scan.status, ScanStatus::Interrupted);
         }
     }
 }

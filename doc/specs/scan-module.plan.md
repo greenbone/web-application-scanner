@@ -134,6 +134,14 @@ Implement asynchronous execution with FIFO queue and configurable worker count.
 - On worker/internal error in non-terminal states, transition to `interrupted`.
 - If cleanup fails after successful scan completion, keep scan lifecycle status `done` and log warning.
 
+## Phase 3A: Observability and Telemetry (Unblocked)
+
+Pull forward observability work that does not depend on unfinished phases.
+
+- Emit info logs on every scan lifecycle status transition.
+- Emit info logs for scan creation and scan deletion commands.
+- Emit queue wait time telemetry (`queued` -> `running`).
+
 ## Phase 4: Stop Flow and Interruption Rules
 
 Implement strict stop semantics for queued and running scans.
@@ -197,10 +205,8 @@ Wire scan runtime into service startup.
 
 ## Phase 8: Observability and Telemetry
 
-Add required logs/telemetry from the spec.
+Complete observability work that depends on retry behavior.
 
-- Emit info logs + telemetry on every scan lifecycle status transition.
-- Emit queue wait time telemetry (`queued` -> `running`).
 - Log transient ZAP/storage failures as warnings when retries remain.
 - Log retry exhaustion as error before transitioning to `interrupted`.
 
@@ -224,6 +230,7 @@ Follow repository sidecar test pattern.
 - Add tests proving alert cursor advancement happens only after successful alert-to-result persistence.
 - Add service tests for read commands (`get_scan`, `get_scan_status`, `get_result`) including not-found behavior.
 - Add API tests confirming scan endpoints use the service facade and keep storage access out of handler logic.
+- Add service/API tests asserting scan creation and deletion emit informational logs.
 
 ## Configuration Additions
 

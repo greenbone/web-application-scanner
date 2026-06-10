@@ -109,6 +109,27 @@ async fn transition_scan_status_requires_expected_state() {
 }
 
 #[tokio::test]
+async fn transition_scan_status_sets_lifecycle_timestamps() {
+    let s = make_storage().await;
+    s.create_scan(make_scan("ts")).await.unwrap();
+
+    s.transition_scan_status("ts", ScanStatus::New, ScanStatus::Queued)
+        .await
+        .unwrap();
+    s.transition_scan_status("ts", ScanStatus::Queued, ScanStatus::Running)
+        .await
+        .unwrap();
+    s.transition_scan_status("ts", ScanStatus::Running, ScanStatus::Done)
+        .await
+        .unwrap();
+
+    let scan = s.get_scan("ts").await.unwrap();
+    assert!(scan.queued_time.is_some());
+    assert!(scan.start_time.is_some());
+    assert!(scan.end_time.is_some());
+}
+
+#[tokio::test]
 async fn update_scan_context_progress_and_cursor_roundtrip() {
     let s = make_storage().await;
     s.create_scan(make_scan("meta")).await.unwrap();

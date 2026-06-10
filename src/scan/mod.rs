@@ -5,6 +5,7 @@
 //! Scan domain primitives and lifecycle transitions.
 
 pub mod errors;
+mod observability;
 pub mod progress;
 pub mod queue;
 pub mod service;
