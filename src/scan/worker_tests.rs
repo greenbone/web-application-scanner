@@ -294,7 +294,7 @@ async fn wait_for_status(storage: &dyn ScanStorage, scan_id: &str, expected: Sca
 
 #[traced_test]
 #[tokio::test]
-async fn runtime_processes_queued_scan_to_done_and_persists_alert_results() {
+async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_results() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let server = mock_zap_server().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
@@ -316,11 +316,11 @@ async fn runtime_processes_queued_scan_to_done_and_persists_alert_results() {
         .unwrap();
 
     service.start_scan(&scan_id).await.unwrap();
-    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Done).await;
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
 
     let scan = storage.get_scan(&scan_id).await.unwrap();
     let expected_context_name = format!("greenbone-was-{scan_id}");
-    assert_eq!(scan.status, ScanStatus::Done);
+    assert_eq!(scan.status, ScanStatus::Succeeded);
     assert_eq!(scan.context_name.as_deref(), Some(expected_context_name.as_str()));
     assert_eq!(scan.context_id.as_deref(), Some("ctx-1"));
     assert_eq!(scan.alert_cursor, Some(1));
@@ -338,7 +338,7 @@ async fn runtime_processes_queued_scan_to_done_and_persists_alert_results() {
 }
 
 #[tokio::test]
-async fn runtime_transitions_running_scan_to_interrupted_on_worker_error() {
+async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let server = mock_zap_server_with_active_status_error().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
@@ -360,14 +360,14 @@ async fn runtime_transitions_running_scan_to_interrupted_on_worker_error() {
         .unwrap();
 
     service.start_scan(&scan_id).await.unwrap();
-    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Interrupted).await;
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Failed).await;
 
     let scan = storage.get_scan(&scan_id).await.unwrap();
-    assert_eq!(scan.status, ScanStatus::Interrupted);
+    assert_eq!(scan.status, ScanStatus::Failed);
 }
 
 #[tokio::test]
-async fn runtime_keeps_done_status_when_context_cleanup_fails() {
+async fn runtime_keeps_succeeded_status_when_context_cleanup_fails() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let server = mock_zap_server_with_remove_context_error().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
@@ -389,10 +389,10 @@ async fn runtime_keeps_done_status_when_context_cleanup_fails() {
         .unwrap();
 
     service.start_scan(&scan_id).await.unwrap();
-    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Done).await;
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
 
     let scan = storage.get_scan(&scan_id).await.unwrap();
-    assert_eq!(scan.status, ScanStatus::Done);
+    assert_eq!(scan.status, ScanStatus::Succeeded);
 }
 
 #[tokio::test]
@@ -427,12 +427,12 @@ async fn runtime_with_multiple_workers_processes_multiple_scans() {
     service.start_scan(&scan_id_1).await.unwrap();
     service.start_scan(&scan_id_2).await.unwrap();
 
-    wait_for_status(storage.as_ref(), &scan_id_1, ScanStatus::Done).await;
-    wait_for_status(storage.as_ref(), &scan_id_2, ScanStatus::Done).await;
+    wait_for_status(storage.as_ref(), &scan_id_1, ScanStatus::Succeeded).await;
+    wait_for_status(storage.as_ref(), &scan_id_2, ScanStatus::Succeeded).await;
 
     let scan_1 = storage.get_scan(&scan_id_1).await.unwrap();
     let scan_2 = storage.get_scan(&scan_id_2).await.unwrap();
-    assert_eq!(scan_1.status, ScanStatus::Done);
-    assert_eq!(scan_2.status, ScanStatus::Done);
+    assert_eq!(scan_1.status, ScanStatus::Succeeded);
+    assert_eq!(scan_2.status, ScanStatus::Succeeded);
 */
 }

@@ -48,7 +48,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
 
 #[traced_test]
 #[tokio::test]
-async fn create_scan_persists_new_status() {
+async fn create_scan_persists_stored_status() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let service = DefaultScanService::new_storage_only(storage.clone());
 
@@ -56,16 +56,16 @@ async fn create_scan_persists_new_status() {
     let persisted = storage.get_scan(&scan_id).await.unwrap();
 
     assert_eq!(persisted.id, scan_id);
-    assert_eq!(persisted.status, ScanStatus::New);
+    assert_eq!(persisted.status, ScanStatus::Stored);
     assert!(logs_contain("scan created"));
 }
 
 #[traced_test]
 #[tokio::test]
-async fn start_scan_transitions_new_to_queued() {
+async fn start_scan_transitions_stored_to_requested() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("start-scan", ScanStatus::New))
+        .create_scan(make_scan("start-scan", ScanStatus::Stored))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage.clone());
@@ -73,15 +73,15 @@ async fn start_scan_transitions_new_to_queued() {
     service.start_scan("start-scan").await.unwrap();
 
     let persisted = storage.get_scan("start-scan").await.unwrap();
-    assert_eq!(persisted.status, ScanStatus::Queued);
+    assert_eq!(persisted.status, ScanStatus::Requested);
     assert!(logs_contain("scan status transition"));
 }
 
 #[tokio::test]
-async fn start_scan_returns_invalid_transition_for_non_new_scans() {
+async fn start_scan_returns_invalid_transition_for_non_stored_scans() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("done-scan", ScanStatus::Done))
+        .create_scan(make_scan("done-scan", ScanStatus::Succeeded))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage);
@@ -91,17 +91,17 @@ async fn start_scan_returns_invalid_transition_for_non_new_scans() {
     assert!(matches!(
         err,
         ScanServiceError::InvalidTransition {
-            from: ScanStatus::Done,
-            requested: ScanStatus::Queued,
+            from: ScanStatus::Succeeded,
+            requested: ScanStatus::Requested,
         }
     ));
 }
 
 #[tokio::test]
-async fn stop_scan_transitions_queued_to_stopped() {
+async fn stop_scan_transitions_requested_to_stopped() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("queued-scan", ScanStatus::Queued))
+        .create_scan(make_scan("queued-scan", ScanStatus::Requested))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage.clone());
@@ -131,7 +131,7 @@ async fn stop_scan_transitions_running_to_stop_requested() {
 async fn delete_scan_rejects_non_deletable_states() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("queued-delete", ScanStatus::Queued))
+        .create_scan(make_scan("queued-delete", ScanStatus::Requested))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage);
@@ -141,8 +141,8 @@ async fn delete_scan_rejects_non_deletable_states() {
     assert!(matches!(
         err,
         ScanServiceError::InvalidTransition {
-            from: ScanStatus::Queued,
-            requested: ScanStatus::Queued,
+            from: ScanStatus::Requested,
+            requested: ScanStatus::Requested,
         }
     ));
 }
@@ -152,7 +152,7 @@ async fn delete_scan_rejects_non_deletable_states() {
 async fn delete_scan_emits_info_log() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("done-delete", ScanStatus::Done))
+        .create_scan(make_scan("done-delete", ScanStatus::Succeeded))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage);
@@ -166,7 +166,7 @@ async fn delete_scan_emits_info_log() {
 async fn get_scan_returns_full_scan_record() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("scan-read", ScanStatus::New))
+        .create_scan(make_scan("scan-read", ScanStatus::Stored))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage);
@@ -174,7 +174,7 @@ async fn get_scan_returns_full_scan_record() {
     let scan = service.get_scan("scan-read").await.unwrap();
 
     assert_eq!(scan.id, "scan-read");
-    assert_eq!(scan.status, ScanStatus::New);
+    assert_eq!(scan.status, ScanStatus::Stored);
     assert_eq!(scan.target.hosts, vec!["https://example.test".to_string()]);
 }
 
@@ -192,7 +192,7 @@ async fn get_scan_maps_missing_scan_to_scan_not_found() {
 async fn get_scan_result_returns_persisted_result() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("scan-result", ScanStatus::New))
+        .create_scan(make_scan("scan-result", ScanStatus::Stored))
         .await
         .unwrap();
     storage
@@ -225,7 +225,7 @@ async fn get_scan_result_returns_persisted_result() {
 async fn get_scan_result_for_missing_index_forwards_storage_error() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
-        .create_scan(make_scan("scan-result-miss", ScanStatus::New))
+        .create_scan(make_scan("scan-result-miss", ScanStatus::Stored))
         .await
         .unwrap();
     let service = DefaultScanService::new_storage_only(storage);

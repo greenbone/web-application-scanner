@@ -20,7 +20,7 @@ fn make_scan(id: &str) -> ScanRecord {
         },
         scan_preferences: vec![],
         vts: vec![],
-        status: ScanStatus::New,
+        status: ScanStatus::Stored,
         queued_time: None,
         start_time: None,
         end_time: None,
@@ -59,7 +59,7 @@ async fn create_and_get_scan() {
     s.create_scan(make_scan("s1")).await.unwrap();
     let scan = s.get_scan("s1").await.unwrap();
     assert_eq!(scan.id, "s1");
-    assert_eq!(scan.status, ScanStatus::New);
+    assert_eq!(scan.status, ScanStatus::Stored);
     assert_eq!(scan.target.hosts, vec!["10.0.0.1"]);
 }
 
@@ -96,12 +96,12 @@ async fn transition_scan_status_requires_expected_state() {
     let s = make_storage().await;
     s.create_scan(make_scan("cas")).await.unwrap();
 
-    s.transition_scan_status("cas", ScanStatus::New, ScanStatus::Queued)
+    s.transition_scan_status("cas", ScanStatus::Stored, ScanStatus::Requested)
         .await
         .unwrap();
 
     let err = s
-        .transition_scan_status("cas", ScanStatus::New, ScanStatus::Running)
+        .transition_scan_status("cas", ScanStatus::Stored, ScanStatus::Running)
         .await
         .unwrap_err();
 
@@ -113,13 +113,13 @@ async fn transition_scan_status_sets_lifecycle_timestamps() {
     let s = make_storage().await;
     s.create_scan(make_scan("ts")).await.unwrap();
 
-    s.transition_scan_status("ts", ScanStatus::New, ScanStatus::Queued)
+    s.transition_scan_status("ts", ScanStatus::Stored, ScanStatus::Requested)
         .await
         .unwrap();
-    s.transition_scan_status("ts", ScanStatus::Queued, ScanStatus::Running)
+    s.transition_scan_status("ts", ScanStatus::Requested, ScanStatus::Running)
         .await
         .unwrap();
-    s.transition_scan_status("ts", ScanStatus::Running, ScanStatus::Done)
+    s.transition_scan_status("ts", ScanStatus::Running, ScanStatus::Succeeded)
         .await
         .unwrap();
 
@@ -177,10 +177,10 @@ async fn batch_results_persist_atomically() {
 #[tokio::test]
 async fn list_non_terminal_scans_excludes_terminal_states() {
     let s = make_storage().await;
-    s.create_scan(make_scan_with_status("new", ScanStatus::New))
+    s.create_scan(make_scan_with_status("new", ScanStatus::Stored))
         .await
         .unwrap();
-    s.create_scan(make_scan_with_status("done", ScanStatus::Done))
+    s.create_scan(make_scan_with_status("done", ScanStatus::Succeeded))
         .await
         .unwrap();
 

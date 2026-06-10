@@ -37,12 +37,12 @@ pub(crate) fn emit_queue_wait_telemetry(scan_id: &str, queued_time: i64, start_t
 
 fn status_label(status: ScanStatus) -> &'static str {
     match status {
-        ScanStatus::New => "new",
-        ScanStatus::Queued => "queued",
+        ScanStatus::Stored => "stored",
+        ScanStatus::Requested => "requested",
         ScanStatus::Running => "running",
         ScanStatus::StopRequested => "stop_requested",
         ScanStatus::Stopped => "stopped",
-        ScanStatus::Interrupted => "interrupted",
-        ScanStatus::Done => "done",
+        ScanStatus::Failed => "failed",
+        ScanStatus::Succeeded => "succeeded",
     }
 }

@@ -54,7 +54,7 @@ impl SqliteStorage {
                 target           TEXT    NOT NULL,
                 scan_preferences TEXT    NOT NULL DEFAULT '[]',
                 vts              TEXT    NOT NULL DEFAULT '[]',
-                status           TEXT    NOT NULL DEFAULT 'new',
+                status           TEXT    NOT NULL DEFAULT 'stored',
                 queued_time      INTEGER,
                 start_time       INTEGER,
                 end_time         INTEGER,
@@ -99,21 +99,12 @@ fn status_to_db(status: &ScanStatus) -> String {
     serde_json::to_value(status)
         .ok()
         .and_then(|v| v.as_str().map(str::to_string))
-        .unwrap_or_else(|| "new".to_string())
+        .unwrap_or_else(|| "stored".to_string())
 }
 
 fn status_from_db(s: &str) -> Result<ScanStatus, StorageError> {
-    // Backward compatibility with pre-Phase-0 persisted values.
-    let normalized = match s {
-        "stored" => "new",
-        "requested" => "queued",
-        "failed" => "interrupted",
-        "succeeded" => "done",
-        _ => s,
-    };
-
-    serde_json::from_value(serde_json::Value::String(normalized.to_string()))
-        .map_err(|e| StorageError::Backend(format!("unrecognised scan status '{normalized}': {e}")))
+    serde_json::from_value(serde_json::Value::String(s.to_string()))
+        .map_err(|e| StorageError::Backend(format!("unrecognised scan status '{s}': {e}")))
 }
 
 fn result_type_to_db(rt: &ResultType) -> String {
@@ -242,7 +233,7 @@ impl ScanStorage for SqliteStorage {
             "SELECT id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
                     context_name, context_id, alert_cursor, progress, interruption_reason
              FROM scans
-             WHERE status NOT IN ('done', 'stopped', 'interrupted')
+               WHERE status NOT IN ('succeeded', 'stopped', 'failed')
              ORDER BY id ASC",
         )
         .fetch_all(&self.pool)
@@ -255,9 +246,9 @@ impl ScanStorage for SqliteStorage {
     async fn update_scan_status(&self, id: &str, status: ScanStatus) -> Result<(), StorageError> {
         let status_str = status_to_db(&status);
         let now = unix_timestamp_now()?;
-        let queued_time = matches!(status, ScanStatus::Queued).then_some(now);
+        let queued_time = matches!(status, ScanStatus::Requested).then_some(now);
         let start_time = matches!(status, ScanStatus::Running).then_some(now);
-        let end_time = matches!(status, ScanStatus::Done | ScanStatus::Stopped | ScanStatus::Interrupted)
+        let end_time = matches!(status, ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed)
             .then_some(now);
 
         let result = sqlx::query(
@@ -290,10 +281,10 @@ impl ScanStorage for SqliteStorage {
         new_status: ScanStatus,
     ) -> Result<(), StorageError> {
         let now = unix_timestamp_now()?;
-        let queued_time = matches!(new_status, ScanStatus::Queued).then_some(now);
+        let queued_time = matches!(new_status, ScanStatus::Requested).then_some(now);
         let start_time = matches!(new_status, ScanStatus::Running).then_some(now);
         let end_time =
-            matches!(new_status, ScanStatus::Done | ScanStatus::Stopped | ScanStatus::Interrupted)
+            matches!(new_status, ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed)
                 .then_some(now);
 
         let mut tx = self

@@ -4,7 +4,7 @@ The `scan` module manages the state of scans by receiving commands from the scan
 
 The state of a scan consists of the following:
 - Scan request data such as preferences or target URLs
-- The general activity status, e.g. whether it is new, queued, running or done
+- The general activity status, e.g. whether it is stored, requested, running or succeeded
 - The progress of the scan for each target URL, tracking sub-states such as AJAX spider scan or active scan
 - Collected scan results
 
@@ -78,13 +78,13 @@ When constructing the ZAP inclusion patterns, any regex metacharacters are escap
 ## Scan states and commands
 
 The main scan states are:
-- new
-- queued
+- stored
+- requested
 - running
 - stop requested
 - stopped
-- interrupted
-- done
+- failed
+- succeeded
 
 Overall and and per-target progress within the `running` status is tracked according to the "Progress model" section below.
 
@@ -100,19 +100,19 @@ Allowed transitions are defined below. Any transition not listed here is invalid
 
 | From state | Trigger | To state | Notes |
 | --- | --- | --- | --- |
-| none | `create_scan` command | `new` | A new scan object is created and persisted. |
-| `new` | `start_scan` command | `queued` | Scan is added to the queue. |
-| `queued` | worker picked scan | `running` | Worker starts execution. |
-| `queued` | `stop_scan` command | `stopped` | Scan worker terminated gracefully or scan is removed from queue before execution. |
-| `queued` | worker/internal error | `interrupted` | Error path for non-terminal states. |
+| none | `create_scan` command | `stored` | A new scan object is created and persisted. |
+| `stored` | `start_scan` command | `requested` | Scan is added to the queue. |
+| `requested` | worker picked scan | `running` | Worker starts execution. |
+| `requested` | `stop_scan` command | `stopped` | Scan worker terminated gracefully or scan is removed from queue before execution. |
+| `requested` | worker/internal error | `failed` | Error path for non-terminal states. |
 | `running` | `stop_scan` command | `stop requested` | Stop has been requested; worker should terminate gracefully. |
-| `running` | all targets finished + alerts fetched | `done` | Successful completion path. |
-| `running` | worker/internal error | `interrupted` | Error path for non-terminal states. |
+| `running` | all targets finished + alerts fetched | `succeeded` | Successful completion path. |
+| `running` | worker/internal error | `failed` | Error path for non-terminal states. |
 | `stop requested` | worker stop completed | `stopped` | Finalized user-requested stop. |
-| `stop requested` | worker/internal error while stopping | `interrupted` | Stop flow failed before clean stop completion. |
+| `stop requested` | worker/internal error while stopping | `failed` | Stop flow failed before clean stop completion. |
 | `stopped` | none | terminal | No further transitions allowed. |
-| `interrupted` | none | terminal | No further transitions allowed. |
-| `done` | none | terminal | No further transitions allowed. |
+| `failed` | none | terminal | No further transitions allowed. |
+| `succeeded` | none | terminal | No further transitions allowed. |
 
 ### General error handling
 
@@ -127,38 +127,38 @@ Storage errors and ZAP client errors will be forwarded as-is.
 
 New scans are created with the `create_scan` command, which requires a list of target URLs and a preferences data structure.
 
-A newly created scan instance is assigned the status `new`, a random UUID and the parameters given by the command. It is not added to the queue yet.
+A newly created scan instance is assigned the status `stored`, a random UUID and the parameters given by the command. It is not added to the queue yet.
 
 The UUID is returned if creation of a scan was successful and used as an identifier for subsequent commands.
 
 ### Scan start
 
-Scans with a given id can be started with the `start_scan` command if they have the status `new`. Otherwise the command will result in an error.
+Scans with a given id can be started with the `start_scan` command if they have the status `stored`. Otherwise the command will result in an error.
 
 The `start_scan` command is not idempotent. Repeated calls after a successful start must return an error.
 
-Starting a scan adds it to the queue and sets it status to `queued`.
+Starting a scan adds it to the queue and sets it status to `requested`.
 
-### Interrupted scan error handling
+### Failed scan error handling
 
-If an error occurs within a scan while it is in a state other than `new`, `stopped` or `done`, its status
-should be set to `interrupted`, it should be removed from the queue and scan workers should terminate.
+If an error occurs within a scan while it is in a state other than `stored`, `stopped` or `succeeded`, its status
+should be set to `failed`, it should be removed from the queue and scan workers should terminate.
 
-For transient errors such as network errors or unavailable locks a configurable retry mechanism should be used instead and the scan should only fail with the `interrupted` when the retry limit is exceeded.
+For transient errors such as network errors or unavailable locks a configurable retry mechanism should be used instead and the scan should only fail with the `failed` when the retry limit is exceeded.
 
 The retry mechanism uses exponential backoff with the delay starting at 1 second. The maximum number of retries is configurable (default: 10 retries) as well as the maximum delay (default: 60 seconds).
 
-On startup, any scans not in the `new` or a terminal state will be set to `interrupted` as it is assumed that the service crashed.
+On startup, any scans not in the `stored` or a terminal state will be set to `failed` as it is assumed that the service crashed.
 
 ### Running scan
 
-When a scan worker has been launched for a `queued` scan, it sets the scan status to `running`.
+When a scan worker has been launched for a `requested` scan, it sets the scan status to `running`.
 
 If no ZAP context exists for the scan, create a new one named `greenbone-was-{scan_uuid}` and set both context name and context id attributes in the scan. It must ensure URL patterns for the targets are added to the context.
 
 Contexts are currently used to isolate alerts and spider results between scans. Future implementations may instead use separate ZAP instances per scan.
 
-If the scan is interrupted there should be an attempt to stop any spider or active scan and clean up the context created for the scan. The scan status will remain `interrupted`.
+If the scan is failed there should be an attempt to stop any spider or active scan and clean up the context created for the scan. The scan status will remain `failed`.
 
 Once the context is set up, the worker runs the AJAX spider for each target URL and updates the progress. The AJAX spider timeout is taken from the preferences passed to `create_scan`.
 
@@ -174,7 +174,7 @@ The alert-to-result conversion uses a dedicated storage function that accepts mu
 
 The alert cursor must only be advanced after successful commit of the corresponding alert-to-result batch transaction. Cursor advancement is coordinated through the execution-state executor, invoked via the scan state coordinator.
 
-When all active scans are finished and all alerts are fetched, the ZAP context is removed and the scan status is set to `done`. Failure to remove the context will not alter the status.
+When all active scans are finished and all alerts are fetched, the ZAP context is removed and the scan status is set to `succeeded`. Failure to remove the context will not alter the status.
 
 ### ZAP alert to scan result mapping
 
@@ -199,17 +199,17 @@ This keeps alert conversion deterministic and compatible with the current public
 
 ### Scan stop
 
-Scans with a given id can be stopped with the `stop_scan` command if they have the `queued` or `running` status.
+Scans with a given id can be stopped with the `stop_scan` command if they have the `requested` or `running` status.
 
-The `stop_scan` command is not idempotent. Any call for a scan not currently in `queued` or `running` must return an error.
+The `stop_scan` command is not idempotent. Any call for a scan not currently in `requested` or `running` must return an error.
 
-Stopping a `queued` scan will remove it from the queue and set its status to `stopped`.
+Stopping a `requested` scan will remove it from the queue and set its status to `stopped`.
 
 Stopping a `running` scan will set its status to `stop requested` and request scan workers to stop. Once the scan worker has stopped, it will set the status to `stopped`.
 
-If the scan worker does not stop after a configurable grace period, it should be shut down forcefully and the scan status set to `interrupted`. The default grace period is 5 minutes.
+If the scan worker does not stop after a configurable grace period, it should be shut down forcefully and the scan status set to `failed`. The default grace period is 5 minutes.
 
-If a ZAP stop action fails in a non-temporary way, the scan should be interrupted.
+If a ZAP stop action fails in a non-temporary way, the scan should be failed.
 
 If the cleanup of the context fails, the scan status is still set to `stopped`.
 
@@ -231,11 +231,11 @@ Storage-backed missing data outcomes are mapped to `ScanNotFound` for missing sc
 Transport-only endpoints remain outside the scan command surface:
 - `HEAD /scans` metadata endpoint.
 
-Scan results remain available even if the scan is stopped or interrupted. In this case the status also implies that results are partial.
+Scan results remain available even if the scan is stopped or failed. In this case the status also implies that results are partial.
 
 ### Deleting Scans
 
-Scans with a given id that are in either the initial `new` state or one of the terminal states `done`, `stopped`, `interrupted` can be deleted with the `delete_scan` .
+Scans with a given id that are in either the initial `stored` state or one of the terminal states `succeeded`, `stopped`, `failed` can be deleted with the `delete_scan` .
 
 Trying to delete a scan in any other state will cause an error.
 
@@ -245,7 +245,7 @@ The queue is FIFO but its design should remain extensible so prioritization mech
 
 For now only one worker is allowed to be active but this should be extensible to a configurable number of workers and/or resource limits like minimum free RAM.
 
-If all worker slots are occupied, additional started scans remain in `queued` (backpressure) until a worker slot becomes available.
+If all worker slots are occupied, additional started scans remain in `requested` (backpressure) until a worker slot becomes available.
 
 ## Progress model
 
@@ -273,7 +273,7 @@ For each processed alert page, batch result persistence must succeed before the 
 - Transition status logs/telemetry are emitted by the transition executor (via the scan state coordinator) after successful persisted transition updates.
 - Progress updates, alert cursor updates, and result persistence operations must be logged as debug messages by the execution-state executor.
 - Scan creation and scan deletion commands must be logged as informational messages.
-- Queue wait time (time between `queued` and `running`) must be emitted as a telemetry event.
+- Queue wait time (time between `requested` and `running`) must be emitted as a telemetry event.
 - Failed ZAP calls must be logged as warnings when the error is transient and retries remain. Once retries are exhausted, they must be logged as errors.
 
 ## Testing
@@ -285,8 +285,8 @@ The following must be covered by unit tests using a mock ZAP client and in-memor
 - Transition executor behavior: telemetry is emitted on successful persisted transitions and suppressed for failed transition writes.
 - Execution-state executor behavior: result persistence, alert cursor updates, and progress updates preserve required ordering guarantees.
 - Scan state coordinator behavior: transition execution and execution-state persistence are routed through the appropriate underlying executors.
-- Error paths that result in `interrupted` status.
-- Startup recovery: non-terminal scans are set to `interrupted` on service restart.
+- Error paths that result in `failed` status.
+- Startup recovery: non-terminal scans are set to `failed` on service restart.
 - Alert-to-result mapping, including `Informational -> log`, all other alert risk levels -> `alarm`, URL-derived host and port extraction, and invalid alert URL fallback behavior.
 
 ## Notes and open questions

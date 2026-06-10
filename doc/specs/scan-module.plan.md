@@ -32,13 +32,13 @@ Status: Done (2026-06-08)
 First align the scan-domain lifecycle status model and command semantics with the spec.
 
 - Add scan-domain `ScanStatus` in the scan module (for example `src/scan/status.rs`) and replace current lifecycle variants with:
-  - `new`
-  - `queued`
+  - `stored`
+  - `requested`
   - `running`
   - `stop requested`
   - `stopped`
-  - `interrupted`
-  - `done`
+  - `failed`
+  - `succeeded`
 - Remove lifecycle status ownership from API DTOs and make API/storage depend on the scan-domain `ScanStatus` type.
 - Introduce one transition validator in the scan module and remove duplicated state logic from API handlers.
 - Enforce non-idempotent `start_scan` and `stop_scan` behavior through this validator.
@@ -72,7 +72,7 @@ Create an internal scan service interface used by API handlers.
   - `ScanNotFound`
   - `InvalidUrl`
   - wrapped storage and zap client errors
-- Ensure `create_scan` persists scan in `new` and does not enqueue automatically.
+- Ensure `create_scan` persists scan in `stored` and does not enqueue automatically.
 - Keep `HEAD /scans` metadata as a transport-only API concern.
 
 Phase 1 amendments (2026-06-08):
@@ -105,7 +105,7 @@ Add persistence support for runtime worker state and safe transitions.
   - alert cursor update (executed only after successful alert-to-result batch commit)
   - listing scans in non-terminal states (startup recovery)
 - Use SQL transactions for all state + progress changes done together.
-- Keep existing results storage behavior and retain partial results for stopped/interrupted scans.
+- Keep existing results storage behavior and retain partial results for stopped/failed scans.
 
 Phase 2 amendments (2026-06-08):
 
@@ -124,10 +124,10 @@ Implement asynchronous execution with FIFO queue and configurable worker count.
 - Add FIFO queue abstraction with:
   - enqueue by scan id
   - dequeue for worker
-  - remove queued scan by id (for queued stop)
+  - remove requested scan by id (for requested stop)
 - Add worker supervisor with default single worker and configurable max workers.
 - Worker execution pipeline per scan:
-  1. transition `queued` -> `running`
+  1. transition `requested` -> `running`
   2. create/reuse context `greenbone-was-{scan_uuid}`
   3. include escaped target regex patterns in context
   4. run AJAX spider per target and update stage progress
@@ -135,9 +135,9 @@ Implement asynchronous execution with FIFO queue and configurable worker count.
   6. poll alerts while scanning using pagination cursor
   6.1 convert fetched alert batches to result records via transactional multi-alert storage function
   6.2 update the alert cursor only after the batch persistence transaction succeeds
-  7. cleanup context and finalize `done`
-- On worker/internal error in non-terminal states, transition to `interrupted`.
-- If cleanup fails after successful scan completion, keep scan lifecycle status `done` and log warning.
+  7. cleanup context and finalize `succeeded`
+- On worker/internal error in non-terminal states, transition to `failed`.
+- If cleanup fails after successful scan completion, keep scan lifecycle status `succeeded` and log warning.
 
 ## Phase 3A: Observability and Telemetry (Unblocked)
 Status: Done (2026-06-10)
@@ -146,7 +146,7 @@ Pull forward observability work that does not depend on unfinished phases.
 
 - Emit info logs on every scan lifecycle status transition.
 - Emit info logs for scan creation and scan deletion commands.
-- Emit queue wait time telemetry (`queued` -> `running`).
+- Emit queue wait time telemetry (`requested` -> `running`).
 
 ## Phase 3B: Scan Domain Type and Scan State Coordinator Boundaries
 
@@ -167,9 +167,9 @@ Introduce a scan-domain data model boundary for service contracts.
 
 ## Phase 4: Stop Flow and Interruption Rules
 
-Implement strict stop semantics for queued and running scans.
+Implement strict stop semantics for requested and running scans.
 
-- `queued` + stop:
+- `requested` + stop:
   - remove from queue
   - transition directly to `stopped`
 - `running` + stop:
@@ -177,8 +177,8 @@ Implement strict stop semantics for queued and running scans.
   - signal worker cancellation
   - worker performs graceful stop and transitions to `stopped`
 - Add configurable stop grace period (default 5 minutes):
-  - if exceeded, force stop and transition to `interrupted`
-- If ZAP stop actions fail non-transiently, transition to `interrupted`.
+  - if exceeded, force stop and transition to `failed`
+- If ZAP stop actions fail non-transiently, transition to `failed`.
 
 ## Phase 5: URL Validation and Retry Backoff
 
@@ -197,7 +197,7 @@ Implement spec-compliant target validation and resilient external calls.
   - configurable max retries (default 10)
   - configurable max delay (default 60 seconds)
 - Use retry for transient storage lock/contention and transient ZAP/network failures.
-- Exhausted retries transition active scan to `interrupted`.
+- Exhausted retries transition active scan to `failed`.
 
 ## Phase 6: Progress Model and Alerts Polling
 
@@ -221,7 +221,7 @@ Wire scan runtime into service startup.
 
 - In `src/lib.rs` startup path:
   - initialize scan service + queue + worker supervisor
-  - run recovery pass: all non-terminal scans become `interrupted`
+  - run recovery pass: all non-terminal scans become `failed`
   - start worker tasks before serving API traffic
 - Extend `AppState` to include scan service handle and resolved scan-runtime configuration values used by handlers/workers.
 - Keep API module as transport boundary only (HTTP parsing + response mapping).
@@ -231,7 +231,7 @@ Wire scan runtime into service startup.
 Complete observability work that depends on retry behavior.
 
 - Log transient ZAP/storage failures as warnings when retries remain.
-- Log retry exhaustion as error before transitioning to `interrupted`.
+- Log retry exhaustion as error before transitioning to `failed`.
 
 ## Phase 9: Tests
 
@@ -243,13 +243,13 @@ Follow repository sidecar test pattern.
 - Add execution-state executor submodule tests covering result-batch + alert-cursor ordering and progress update routing.
 - Add scan state coordinator tests covering delegation to the transition executor and execution-state executor.
 - Add worker-path tests for:
-  - successful completion to `done`
-  - queued stop path to `stopped`
+  - successful completion to `succeeded`
+  - requested stop path to `stopped`
   - running stop path through `stop requested` to `stopped`
-  - forced stop timeout to `interrupted`
-  - retry exhaustion to `interrupted`
+  - forced stop timeout to `failed`
+  - retry exhaustion to `failed`
 - Add startup recovery test:
-  - non-terminal scans become `interrupted` on startup.
+  - non-terminal scans become `failed` on startup.
 - Add URL validation tests for all rejection rules.
 - Add alert pagination tests ensuring duplicate avoidance.
 - Add tests for alert-to-result batch conversion ensuring all converted results are written atomically per alert page.
@@ -286,13 +286,13 @@ Before opening the implementation PR:
 - Confirm status transition telemetry is emitted via the transition executor after successful storage mutation.
 - Confirm result persistence, alert cursor updates, and progress updates flow through the execution-state executor via the scan state coordinator.
 - Manual API checks:
-  - create -> `new`
-  - start (`new`) -> `queued`
+  - create -> `stored`
+  - start (`stored`) -> `requested`
   - worker pick -> `running`
-  - stop queued -> `stopped`
+  - stop requested -> `stopped`
   - stop running -> `stop requested` -> `stopped`
-  - runtime failure in non-terminal -> `interrupted`
-  - done/stopped/interrupted/new deletable
+  - runtime failure in non-terminal -> `failed`
+  - succeeded/stopped/failed/stored deletable
 
 ## Non-Goals
 

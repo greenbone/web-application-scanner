@@ -110,7 +110,7 @@ impl ScanWorker {
                     worker = self.worker_index,
                     scan_id,
                     error = %error,
-                    "scan worker interrupted scan execution"
+                    "scan worker failed scan execution"
                 );
             }
         }
@@ -119,7 +119,7 @@ impl ScanWorker {
     async fn process_scan(&self, scan_id: &str) -> Result<(), WorkerError> {
         let claim_result = self
             .scan_state
-            .transition_status(scan_id, ScanStatus::Queued, ScanStatus::Running)
+            .transition_status(scan_id, ScanStatus::Requested, ScanStatus::Running)
             .await;
 
         match claim_result {
@@ -128,7 +128,7 @@ impl ScanWorker {
                 debug!(
                     worker = self.worker_index,
                     scan_id,
-                    "skipping queued scan that was already handled or removed"
+                    "skipping requested scan that was already handled or removed"
                 );
                 return Ok(());
             }
@@ -220,7 +220,7 @@ impl ScanWorker {
         }
 
         self.scan_state
-            .overwrite_status(&scan.id, ScanStatus::Running, ScanStatus::Done)
+            .overwrite_status(&scan.id, ScanStatus::Running, ScanStatus::Succeeded)
             .await?;
         Ok(())
     }
@@ -299,7 +299,7 @@ impl ScanWorker {
 
         if matches!(
             scan.status,
-            ScanStatus::New | ScanStatus::Stopped | ScanStatus::Interrupted | ScanStatus::Done
+            ScanStatus::Stored | ScanStatus::Stopped | ScanStatus::Failed | ScanStatus::Succeeded
         ) {
             return;
         }
@@ -312,10 +312,10 @@ impl ScanWorker {
 
         if let Err(error) = self
             .scan_state
-            .overwrite_status(scan_id, scan.status, ScanStatus::Interrupted)
+            .overwrite_status(scan_id, scan.status, ScanStatus::Failed)
             .await
         {
-            warn!(scan_id, error = %error, "failed to transition scan to interrupted state");
+            warn!(scan_id, error = %error, "failed to transition scan to failed state");
         }
     }
 }
