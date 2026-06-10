@@ -49,12 +49,12 @@ pub fn render(metadata: &NaslMetadata) -> String {
     line_tag(
         &mut output,
         "creation_date",
-        &normalize_text(&metadata.creation_date),
+        &format_openvas_date_tag(&metadata.creation_date),
     );
     line_tag(
         &mut output,
         "last_modification",
-        &normalize_text(&metadata.last_modification),
+        &format_openvas_date_tag(&metadata.last_modification),
     );
     line_call(&mut output, "script_name", &[&metadata.name]);
     output.push('\n');
@@ -204,6 +204,76 @@ pub fn normalize_text(value: &str) -> String {
         }
     }
     output.trim().to_string()
+}
+
+pub fn format_openvas_date_tag(value: &str) -> String {
+    let value = value.trim();
+    if value.len() < 19 {
+        return normalize_text(value);
+    }
+
+    let bytes = value.as_bytes();
+    if !is_date_time_prefix(bytes) {
+        return normalize_text(value);
+    }
+
+    let date = &value[..10];
+    let time = &value[11..19];
+    let mut rest = &value[19..];
+
+    if let Some(stripped) = rest.strip_prefix('.') {
+        let fraction_len = stripped
+            .bytes()
+            .take_while(|byte| byte.is_ascii_digit())
+            .count();
+        rest = &stripped[fraction_len..];
+    }
+
+    rest = rest.trim_start();
+    let offset = if let Some(stripped) = rest.strip_prefix('Z') {
+        rest = stripped;
+        "+0000".to_string()
+    } else if rest.len() >= 6
+        && matches!(rest.as_bytes()[0], b'+' | b'-')
+        && rest.as_bytes()[3] == b':'
+        && rest.as_bytes()[1..3].iter().all(u8::is_ascii_digit)
+        && rest.as_bytes()[4..6].iter().all(u8::is_ascii_digit)
+    {
+        let offset = format!("{}{}", &rest[..3], &rest[4..6]);
+        rest = &rest[6..];
+        offset
+    } else if rest.len() >= 5
+        && matches!(rest.as_bytes()[0], b'+' | b'-')
+        && rest.as_bytes()[1..5].iter().all(u8::is_ascii_digit)
+    {
+        let offset = rest[..5].to_string();
+        rest = &rest[5..];
+        offset
+    } else {
+        "+0000".to_string()
+    };
+
+    let suffix = rest.trim_start();
+    if suffix.starts_with('(') {
+        format!("{date} {time} {offset} {}", normalize_text(suffix))
+    } else {
+        format!("{date} {time} {offset}")
+    }
+}
+
+fn is_date_time_prefix(bytes: &[u8]) -> bool {
+    bytes.len() >= 19
+        && bytes[0..4].iter().all(u8::is_ascii_digit)
+        && bytes[4] == b'-'
+        && bytes[5..7].iter().all(u8::is_ascii_digit)
+        && bytes[7] == b'-'
+        && bytes[8..10].iter().all(u8::is_ascii_digit)
+        && matches!(bytes[10], b'T' | b' ')
+        && bytes[11..13].iter().all(u8::is_ascii_digit)
+        && bytes[13] == b':'
+        && bytes[14..16].iter().all(u8::is_ascii_digit)
+        && bytes[16] == b':'
+        && bytes[17..19].iter().all(u8::is_ascii_digit)
 }
 
 pub fn escape_nasl_string(value: &str) -> String {
