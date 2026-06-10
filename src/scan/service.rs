@@ -12,10 +12,11 @@ use uuid::Uuid;
 use crate::{
     api::dto::scans::{PreferencesResponse, ScannerPreference, Target, Vt},
     scan::{
-        ScanRuntimeHandle, ScanServiceError, ScanStatus,
-        observability::{emit_scan_created, emit_scan_deleted, emit_status_transition},
+        Scan, ScanResult, ScanRuntimeHandle, ScanServiceError, ScanStateCoordinator, ScanStatus,
+        ScanStatusView,
+        observability::{emit_scan_created, emit_scan_deleted},
     },
-    storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
+    storage::{StorageError, StorageHandle},
 };
 
 /// Shared handle for the scan service used in application state.
@@ -36,18 +37,18 @@ pub trait ScanService: Send + Sync {
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError>;
 
-    async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError>;
+    async fn get_scan(&self, id: &str) -> Result<Scan, ScanServiceError>;
 
     async fn get_scan_result(
         &self,
         id: &str,
         result_id: i64,
-    ) -> Result<ResultRecord, ScanServiceError>;
+    ) -> Result<ScanResult, ScanServiceError>;
 
     async fn get_scan_status(
         &self,
         id: &str,
-    ) -> Result<(ScanStatus, Option<i64>, Option<i64>), ScanServiceError>;
+    ) -> Result<ScanStatusView, ScanServiceError>;
 
     async fn start_scan(&self, id: &str) -> Result<(), ScanServiceError>;
 
@@ -60,19 +61,21 @@ pub trait ScanService: Send + Sync {
         id: &str,
         start: usize,
         end: Option<usize>,
-    ) -> Result<Vec<ResultRecord>, ScanServiceError>;
+    ) -> Result<Vec<ScanResult>, ScanServiceError>;
 }
 
 /// Default scan service implementation backed by the configured storage.
 #[derive(Clone)]
 pub struct DefaultScanService {
     storage: StorageHandle,
+    scan_state: ScanStateCoordinator,
     runtime: Option<ScanRuntimeHandle>,
 }
 
 impl DefaultScanService {
     pub fn new_storage_only(storage: StorageHandle) -> Self {
         Self {
+            scan_state: ScanStateCoordinator::new(storage.clone()),
             storage,
             runtime: None,
         }
@@ -80,6 +83,7 @@ impl DefaultScanService {
 
     pub fn new(storage: StorageHandle, runtime: ScanRuntimeHandle) -> Self {
         Self {
+            scan_state: ScanStateCoordinator::new(storage.clone()),
             storage,
             runtime: Some(runtime),
         }
@@ -101,7 +105,7 @@ impl ScanService for DefaultScanService {
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
         let id = Uuid::new_v4().to_string();
-        let scan = ScanRecord {
+        let scan = Scan {
             id: id.clone(),
             target: request.target,
             scan_preferences: request.scan_preferences,
@@ -118,7 +122,7 @@ impl ScanService for DefaultScanService {
         };
 
         self.storage
-            .create_scan(scan)
+            .create_scan(scan.into())
             .await
             .map_err(Self::map_storage_err)?;
 
@@ -127,10 +131,11 @@ impl ScanService for DefaultScanService {
         Ok(id)
     }
 
-    async fn get_scan(&self, id: &str) -> Result<ScanRecord, ScanServiceError> {
+    async fn get_scan(&self, id: &str) -> Result<Scan, ScanServiceError> {
         self.storage
             .get_scan(id)
             .await
+            .map(Into::into)
             .map_err(Self::map_storage_err)
     }
 
@@ -138,45 +143,40 @@ impl ScanService for DefaultScanService {
         &self,
         id: &str,
         result_id: i64,
-    ) -> Result<ResultRecord, ScanServiceError> {
+    ) -> Result<ScanResult, ScanServiceError> {
         self.storage
             .get_result(id, result_id)
             .await
+            .map(Into::into)
             .map_err(Self::map_storage_err)
     }
 
     async fn get_scan_status(
         &self,
         id: &str,
-    ) -> Result<(ScanStatus, Option<i64>, Option<i64>), ScanServiceError> {
-        self.storage
-            .get_scan(id)
-            .await
-            .map(|scan| (scan.status, scan.start_time, scan.end_time))
-            .map_err(Self::map_storage_err)
+    ) -> Result<ScanStatusView, ScanServiceError> {
+        self.get_scan(id).await.map(|scan| scan.status_view())
     }
 
     async fn start_scan(&self, id: &str) -> Result<(), ScanServiceError> {
-        let scan = self
+        let scan_record = self
             .storage
             .get_scan(id)
             .await
             .map_err(Self::map_storage_err)?;
 
         let new_status =
-            scan.status
+            scan_record.status
                 .start_command_transition()
                 .ok_or(ScanServiceError::InvalidTransition {
-                    from: scan.status,
+                    from: scan_record.status,
                     requested: ScanStatus::Queued,
                 })?;
 
-        self.storage
-            .transition_scan_status(id, scan.status, new_status)
+        self.scan_state
+            .transition_status(id, scan_record.status, new_status)
             .await
             .map_err(Self::map_storage_err)?;
-
-        emit_status_transition(id, scan.status, new_status);
 
         if let Some(runtime) = &self.runtime {
             runtime.enqueue(id.to_string()).await;
@@ -186,53 +186,51 @@ impl ScanService for DefaultScanService {
     }
 
     async fn stop_scan(&self, id: &str) -> Result<(), ScanServiceError> {
-        let scan = self
+        let scan_record = self
             .storage
             .get_scan(id)
             .await
             .map_err(Self::map_storage_err)?;
 
-        let requested = if scan.status == ScanStatus::Running {
+        let requested = if scan_record.status == ScanStatus::Running {
             ScanStatus::StopRequested
         } else {
             ScanStatus::Stopped
         };
 
         let new_status =
-            scan.status
+            scan_record.status
                 .stop_command_transition()
                 .ok_or(ScanServiceError::InvalidTransition {
-                    from: scan.status,
+                    from: scan_record.status,
                     requested,
                 })?;
 
-        if scan.status == ScanStatus::Queued {
+        if scan_record.status == ScanStatus::Queued {
             if let Some(runtime) = &self.runtime {
                 runtime.remove_queued(id).await;
             }
         }
 
-        self.storage
-            .transition_scan_status(id, scan.status, new_status)
+        self.scan_state
+            .transition_status(id, scan_record.status, new_status)
             .await
             .map_err(Self::map_storage_err)?;
-
-        emit_status_transition(id, scan.status, new_status);
 
         Ok(())
     }
 
     async fn delete_scan(&self, id: &str) -> Result<(), ScanServiceError> {
-        let scan = self
+        let scan_record = self
             .storage
             .get_scan(id)
             .await
             .map_err(Self::map_storage_err)?;
 
-        if !scan.status.can_delete() {
+        if !scan_record.status.can_delete() {
             return Err(ScanServiceError::InvalidTransition {
-                from: scan.status,
-                requested: scan.status,
+                from: scan_record.status,
+                requested: scan_record.status,
             });
         }
 
@@ -251,10 +249,11 @@ impl ScanService for DefaultScanService {
         id: &str,
         start: usize,
         end: Option<usize>,
-    ) -> Result<Vec<ResultRecord>, ScanServiceError> {
+    ) -> Result<Vec<ScanResult>, ScanServiceError> {
         self.storage
             .get_results(id, start, end)
             .await
+            .map(|results| results.into_iter().map(Into::into).collect())
             .map_err(Self::map_storage_err)
     }
 }

@@ -16,11 +16,11 @@ use tracing::{debug, error, warn};
 use crate::{
     api::dto::scans::ResultType,
     scan::{
-        ScanProgress, ScanStatus,
-        observability::{emit_queue_wait_telemetry, emit_status_transition},
+        Scan, ScanProgress, ScanResult, ScanStateCoordinator, ScanStatus,
+        observability::emit_queue_wait_telemetry,
         queue::ScanQueue,
     },
-    storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
+    storage::{StorageError, StorageHandle},
     zapclient::{
         ZapClient,
         ZapClientError,
@@ -78,6 +78,7 @@ pub fn start_scan_runtime(
         let worker = ScanWorker {
             worker_index,
             storage: storage.clone(),
+            scan_state: ScanStateCoordinator::new(storage.clone()),
             zap_client: zap_client.clone(),
             queue: queue.clone(),
             config: config.clone(),
@@ -94,6 +95,7 @@ pub fn start_scan_runtime(
 struct ScanWorker {
     worker_index: usize,
     storage: StorageHandle,
+    scan_state: ScanStateCoordinator,
     zap_client: ZapClient,
     queue: Arc<ScanQueue>,
     config: ScanRuntimeConfig,
@@ -116,8 +118,8 @@ impl ScanWorker {
 
     async fn process_scan(&self, scan_id: &str) -> Result<(), WorkerError> {
         let claim_result = self
-            .storage
-            .transition_scan_status(scan_id, ScanStatus::Queued, ScanStatus::Running)
+            .scan_state
+            .transition_status(scan_id, ScanStatus::Queued, ScanStatus::Running)
             .await;
 
         match claim_result {
@@ -133,8 +135,7 @@ impl ScanWorker {
             Err(error) => return Err(WorkerError::Storage(error)),
         }
 
-        let scan = self.storage.get_scan(scan_id).await?;
-        emit_status_transition(scan_id, ScanStatus::Queued, ScanStatus::Running);
+        let scan: Scan = self.storage.get_scan(scan_id).await?.into();
         if let (Some(queued_time), Some(start_time)) = (scan.queued_time, scan.start_time) {
             emit_queue_wait_telemetry(scan_id, queued_time, start_time);
         }
@@ -147,18 +148,18 @@ impl ScanWorker {
         }
     }
 
-    async fn execute_scan(&self, scan: &ScanRecord) -> Result<(), WorkerError> {
+    async fn execute_scan(&self, scan: &Scan) -> Result<(), WorkerError> {
         let mut progress = ScanProgress::new(&scan.target.hosts);
-        self.storage
-            .update_scan_progress(&scan.id, Some(progress.as_value()))
+        self.scan_state
+            .update_progress(&scan.id, Some(progress.as_value()))
             .await?;
 
         let (context_name, context_id) = self.ensure_context(scan).await?;
 
         for (index, target) in scan.target.hosts.iter().enumerate() {
             progress.mark_spider_running(index);
-            self.storage
-                .update_scan_progress(&scan.id, Some(progress.as_value()))
+            self.scan_state
+                .update_progress(&scan.id, Some(progress.as_value()))
                 .await?;
 
             self.zap_client
@@ -174,8 +175,8 @@ impl ScanWorker {
 
             progress.mark_spider_done(index);
             progress.mark_active_scan_running(index);
-            self.storage
-                .update_scan_progress(&scan.id, Some(progress.as_value()))
+            self.scan_state
+                .update_progress(&scan.id, Some(progress.as_value()))
                 .await?;
 
             let active_scan_id = self
@@ -195,8 +196,8 @@ impl ScanWorker {
                     .get_active_scan_status(&active_scan_id)
                     .await?;
                 progress.update_active_scan(index, active_percentage);
-                self.storage
-                    .update_scan_progress(&scan.id, Some(progress.as_value()))
+                self.scan_state
+                    .update_progress(&scan.id, Some(progress.as_value()))
                     .await?;
 
                 if active_percentage >= 100 {
@@ -207,8 +208,8 @@ impl ScanWorker {
             }
 
             progress.mark_active_scan_done(index);
-            self.storage
-                .update_scan_progress(&scan.id, Some(progress.as_value()))
+            self.scan_state
+                .update_progress(&scan.id, Some(progress.as_value()))
                 .await?;
             self.poll_and_persist_alerts(&scan.id, &context_name).await?;
         }
@@ -218,12 +219,13 @@ impl ScanWorker {
             warn!(scan_id = scan.id, error = %error, "failed to remove ZAP context after successful scan completion");
         }
 
-        self.storage.update_scan_status(&scan.id, ScanStatus::Done).await?;
-        emit_status_transition(&scan.id, ScanStatus::Running, ScanStatus::Done);
+        self.scan_state
+            .overwrite_status(&scan.id, ScanStatus::Running, ScanStatus::Done)
+            .await?;
         Ok(())
     }
 
-    async fn ensure_context(&self, scan: &ScanRecord) -> Result<(String, String), WorkerError> {
+    async fn ensure_context(&self, scan: &Scan) -> Result<(String, String), WorkerError> {
         if let (Some(context_name), Some(context_id)) =
             (scan.context_name.clone(), scan.context_id.clone())
         {
@@ -240,8 +242,8 @@ impl ScanWorker {
                 .await?;
         }
 
-        self.storage
-            .update_scan_context(&scan.id, Some(context_name.clone()), Some(context_id.clone()))
+        self.scan_state
+            .update_context(&scan.id, Some(context_name.clone()), Some(context_id.clone()))
             .await?;
 
         Ok((context_name, context_id))
@@ -253,7 +255,7 @@ impl ScanWorker {
         context_name: &str,
     ) -> Result<(), WorkerError> {
         loop {
-            let scan = self.storage.get_scan(scan_id).await?;
+            let scan: Scan = self.storage.get_scan(scan_id).await?.into();
             let cursor = scan.alert_cursor.unwrap_or(0);
             let alerts = self
                 .zap_client
@@ -274,9 +276,8 @@ impl ScanWorker {
                 .map(|alert| alert_to_result(scan_id, alert))
                 .collect();
 
-            self.storage.add_results(scan_id, results).await?;
-            self.storage
-                .update_alert_cursor(scan_id, Some(cursor + alerts.len() as i64))
+            self.scan_state
+                .persist_alert_batch(scan_id, cursor + alerts.len() as i64, results)
                 .await?;
 
             if alerts.len() < self.config.alert_page_size as usize {
@@ -289,7 +290,7 @@ impl ScanWorker {
 
     async fn interrupt_scan(&self, scan_id: &str) {
         let scan = match self.storage.get_scan(scan_id).await {
-            Ok(scan) => scan,
+            Ok(scan_record) => Scan::from(scan_record),
             Err(error) => {
                 error!(scan_id, error = %error, "failed to load scan for interruption handling");
                 return;
@@ -310,18 +311,16 @@ impl ScanWorker {
         }
 
         if let Err(error) = self
-            .storage
-            .update_scan_status(scan_id, ScanStatus::Interrupted)
+            .scan_state
+            .overwrite_status(scan_id, scan.status, ScanStatus::Interrupted)
             .await
         {
             warn!(scan_id, error = %error, "failed to transition scan to interrupted state");
-        } else {
-            emit_status_transition(scan_id, scan.status, ScanStatus::Interrupted);
         }
     }
 }
 
-fn alert_to_result(scan_id: &str, alert: &Alert) -> ResultRecord {
+fn alert_to_result(scan_id: &str, alert: &Alert) -> ScanResult {
     let parsed_url = reqwest::Url::parse(&alert.url).ok();
     let hostname = parsed_url
         .as_ref()
@@ -346,7 +345,7 @@ fn alert_to_result(scan_id: &str, alert: &Alert) -> ResultRecord {
         message.push_str(&alert.description);
     }
 
-    ResultRecord {
+    ScanResult {
         id: 0,
         scan_id: scan_id.to_string(),
         result_type: match alert.risk {
