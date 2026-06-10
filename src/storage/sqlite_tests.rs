@@ -21,6 +21,7 @@ fn make_scan(id: &str) -> ScanRecord {
         scan_preferences: vec![],
         vts: vec![],
         status: ScanStatus::Stored,
+        stop_requested: false,
         queued_time: None,
         start_time: None,
         end_time: None,

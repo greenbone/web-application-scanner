@@ -35,10 +35,10 @@ First align the scan-domain lifecycle status model and command semantics with th
   - `stored`
   - `requested`
   - `running`
-  - `stop requested`
   - `stopped`
   - `failed`
   - `succeeded`
+- Represent running stop intent with a separate scan-model boolean flag (`stop_requested`) instead of a dedicated lifecycle status.
 - Remove lifecycle status ownership from API DTOs and make API/storage depend on the scan-domain `ScanStatus` type.
 - Introduce one transition validator in the scan module and remove duplicated state logic from API handlers.
 - Enforce non-idempotent `start_scan` and `stop_scan` behavior through this validator.
@@ -165,7 +165,7 @@ Introduce a scan-domain data model boundary for service contracts.
 - Preserve required ordering semantics in the execution-state executor (for example, alert cursor advancement only after successful result batch persistence).
 - Keep scan-domain `Scan` as a pure domain model while infrastructure side effects remain in executor/facade components.
 
-## Phase 4: Stop Flow and Interruption Rules
+## Phase 4: Stop Flow and Stop-Request Flag
 
 Implement strict stop semantics for requested and running scans.
 
@@ -173,9 +173,9 @@ Implement strict stop semantics for requested and running scans.
   - remove from queue
   - transition directly to `stopped`
 - `running` + stop:
-  - transition to `stop requested`
+  - keep status `running` and set `stop_requested=true`
   - signal worker cancellation
-  - worker performs graceful stop and transitions to `stopped`
+  - worker performs graceful stop and transitions to `stopped` while clearing `stop_requested`
 - Add configurable stop grace period (default 5 minutes):
   - if exceeded, force stop and transition to `failed`
 - If ZAP stop actions fail non-transiently, transition to `failed`.
@@ -245,7 +245,7 @@ Follow repository sidecar test pattern.
 - Add worker-path tests for:
   - successful completion to `succeeded`
   - requested stop path to `stopped`
-  - running stop path through `stop requested` to `stopped`
+  - running stop path via `stop_requested=true` to `stopped`
   - forced stop timeout to `failed`
   - retry exhaustion to `failed`
 - Add startup recovery test:
@@ -289,8 +289,8 @@ Before opening the implementation PR:
   - create -> `stored`
   - start (`stored`) -> `requested`
   - worker pick -> `running`
-  - stop requested -> `stopped`
-  - stop running -> `stop requested` -> `stopped`
+  - stop `requested` -> `stopped`
+  - stop running -> `running` + `stop_requested=true` -> `stopped`
   - runtime failure in non-terminal -> `failed`
   - succeeded/stopped/failed/stored deletable
 

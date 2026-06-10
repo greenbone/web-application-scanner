@@ -35,6 +35,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
         scan_preferences: vec![],
         vts: vec![],
         status,
+        stop_requested: false,
         queued_time: None,
         start_time: None,
         end_time: None,
@@ -113,7 +114,7 @@ async fn stop_scan_transitions_requested_to_stopped() {
 }
 
 #[tokio::test]
-async fn stop_scan_transitions_running_to_stop_requested() {
+async fn stop_scan_marks_running_scan_as_stop_requested() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     storage
         .create_scan(make_scan("running-scan", ScanStatus::Running))
@@ -124,7 +125,8 @@ async fn stop_scan_transitions_running_to_stop_requested() {
     service.stop_scan("running-scan").await.unwrap();
 
     let persisted = storage.get_scan("running-scan").await.unwrap();
-    assert_eq!(persisted.status, ScanStatus::StopRequested);
+    assert_eq!(persisted.status, ScanStatus::Running);
+    assert!(persisted.stop_requested);
 }
 
 #[tokio::test]
