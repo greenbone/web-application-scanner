@@ -29,9 +29,7 @@ pub(crate) fn emit_queue_wait_telemetry(scan_id: &str, queued_time: i64, start_t
     let queue_wait_seconds = (start_time - queued_time).max(0);
     info!(
         telemetry_event = "scan_queue_wait_seconds",
-        scan_id,
-        queue_wait_seconds,
-        "scan telemetry event"
+        scan_id, queue_wait_seconds, "scan telemetry event"
     );
 }
 

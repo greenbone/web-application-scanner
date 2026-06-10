@@ -7,7 +7,10 @@ use sqlx::{
     Row,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions},
 };
-use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     api::dto::scans::{ResultType, ScannerPreference, Target, Vt},
@@ -252,8 +255,11 @@ impl ScanStorage for SqliteStorage {
         let now = unix_timestamp_now()?;
         let queued_time = matches!(status, ScanStatus::Requested).then_some(now);
         let start_time = matches!(status, ScanStatus::Running).then_some(now);
-        let end_time = matches!(status, ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed)
-            .then_some(now);
+        let end_time = matches!(
+            status,
+            ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed
+        )
+        .then_some(now);
 
         let result = sqlx::query(
             "UPDATE scans
@@ -264,14 +270,14 @@ impl ScanStorage for SqliteStorage {
                  end_time = COALESCE(?, end_time)
              WHERE id = ?",
         )
-            .bind(&status_str)
-            .bind(queued_time)
-            .bind(start_time)
-            .bind(end_time)
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        .bind(&status_str)
+        .bind(queued_time)
+        .bind(start_time)
+        .bind(end_time)
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
 
         if result.rows_affected() == 0 {
             return Err(StorageError::NotFound(id.to_string()));
@@ -288,9 +294,11 @@ impl ScanStorage for SqliteStorage {
         let now = unix_timestamp_now()?;
         let queued_time = matches!(new_status, ScanStatus::Requested).then_some(now);
         let start_time = matches!(new_status, ScanStatus::Running).then_some(now);
-        let end_time =
-            matches!(new_status, ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed)
-                .then_some(now);
+        let end_time = matches!(
+            new_status,
+            ScanStatus::Succeeded | ScanStatus::Stopped | ScanStatus::Failed
+        )
+        .then_some(now);
 
         let mut tx = self
             .pool
@@ -307,15 +315,15 @@ impl ScanStorage for SqliteStorage {
                  end_time = COALESCE(?, end_time)
              WHERE id = ? AND status = ?",
         )
-            .bind(status_to_db(&new_status))
-            .bind(queued_time)
-            .bind(start_time)
-            .bind(end_time)
-            .bind(id)
-            .bind(status_to_db(&expected))
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        .bind(status_to_db(&new_status))
+        .bind(queued_time)
+        .bind(start_time)
+        .bind(end_time)
+        .bind(id)
+        .bind(status_to_db(&expected))
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
 
         if result.rows_affected() == 0 {
             let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM scans WHERE id = ?")

@@ -40,8 +40,8 @@ fn scan_request_serializes_and_deserializes_with_serde_json() {
     };
 
     let json = serde_json::to_string(&payload).expect("scan request should serialize");
-    let decoded = serde_json::from_str::<ScanRequest>(&json)
-        .expect("scan request should deserialize");
+    let decoded =
+        serde_json::from_str::<ScanRequest>(&json).expect("scan request should deserialize");
 
     assert_eq!(decoded, payload);
 }
@@ -98,8 +98,8 @@ fn scan_action_request_round_trips_with_lowercase_action() {
     };
 
     let json = serde_json::to_string(&payload).expect("scan action should serialize");
-    let decoded = serde_json::from_str::<ScanActionRequest>(&json)
-        .expect("scan action should deserialize");
+    let decoded =
+        serde_json::from_str::<ScanActionRequest>(&json).expect("scan action should deserialize");
 
     assert_eq!(json, r#"{"action":"start"}"#);
     assert_eq!(decoded, payload);

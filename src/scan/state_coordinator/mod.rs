@@ -7,7 +7,9 @@
 mod execution_state_executor;
 mod transition_executor;
 
-use self::{execution_state_executor::ExecutionStateExecutor, transition_executor::TransitionExecutor};
+use self::{
+    execution_state_executor::ExecutionStateExecutor, transition_executor::TransitionExecutor,
+};
 
 use crate::{
     scan::{ScanResult, ScanStatus},
@@ -46,7 +48,9 @@ impl ScanStateCoordinator {
         from: ScanStatus,
         to: ScanStatus,
     ) -> Result<(), StorageError> {
-        self.transition_executor.overwrite_status(scan_id, from, to).await
+        self.transition_executor
+            .overwrite_status(scan_id, from, to)
+            .await
     }
 
     pub async fn update_progress(

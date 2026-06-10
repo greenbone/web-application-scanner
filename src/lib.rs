@@ -55,10 +55,8 @@ pub async fn run() -> Result<(), AppError> {
             ..ScanRuntimeConfig::default()
         },
     );
-    let scan_service: ScanServiceHandle = Arc::new(DefaultScanService::new(
-        storage.clone(),
-        runtime,
-    ));
+    let scan_service: ScanServiceHandle =
+        Arc::new(DefaultScanService::new(storage.clone(), runtime));
 
     let state = AppState::new(storage, scan_service);
     let router = http::router::build_router(state);
