@@ -223,6 +223,9 @@ Acceptance:
   diff.
 - Generated output passes basic NASL syntax smoke checks available in this repo
   or adjacent Greenbone tooling.
+- CI runs the repository feed harness, verifies the generated feed with
+  `scannerctl syntax` and `scannerctl feed transform`, and uploads an archive of
+  the generated NASL feed output as a build artifact for inspection.
 - The binary can run without starting the `greenbone-was` HTTP service.
 
 ## Testing Strategy
@@ -256,6 +259,11 @@ The feed workflow remains two separate steps:
 The generator should not clone remote repositories. Network fetches belong in
 separate tooling such as `src/feed/clone.sh` or CI checkout steps.
 
+CI should use the repository-level feed harness to compose these operational
+steps, run OpenVAS scanner validation, and create an inspection archive of the
+generated feed directory. That archive is a build artifact for review and
+debugging; release packaging, signing, and publication remain separate work.
+
 ## Risks and Mitigations
 
 - YAML/frontmatter variation: use `serde_yaml`, typed optional fields, and clear
@@ -273,7 +281,7 @@ separate tooling such as `src/feed/clone.sh` or CI checkout steps.
 
 - Executing ZAP from NASL.
 - Downloading or cloning ZAP documentation.
-- Packaging generated NASL into a distributable feed archive.
+- Packaging generated NASL into a signed or distributable release feed archive.
 - Serving generated VT metadata through the HTTP API.
 - Implementing scan-result import from ZAP alerts.
 

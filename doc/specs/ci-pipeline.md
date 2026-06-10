@@ -13,6 +13,8 @@ external service credentials.
 - Catch dependency, license, and advisory issues before merge.
 - Keep the OpenAPI contract and generated documentation from drifting away from
   the implementation.
+- Generate the ZAP-derived NASL feed in CI and publish the generated files as a
+  build artifact for reviewer inspection.
 - Separate fast merge gates from slower scheduled or optional checks.
 
 ## Scope
@@ -23,6 +25,7 @@ The first version should cover this repository as a Rust service:
 - Unit and integration-style tests that use in-process fakes, WireMock, and
   SQLite.
 - Static API contract files under `doc/`.
+- The offline ZAP-to-NASL feed generator and its generated NASL metadata output.
 - Dependency and supply-chain policy for Cargo dependencies.
 
 It should not require a running ZAP daemon, published container image, or
@@ -135,6 +138,27 @@ contract and the repository already contains a reference document.
   startup timeout.
 - Stop the process cleanly.
 
+### Feed Generation
+
+- Run the repository feed harness in CI:
+
+  ```sh
+  ./bin/generate-feed
+  ```
+
+- The harness must generate the ZAP-derived NASL feed, validate every generated
+  `.nasl` file with `scannerctl syntax`, and run the `scannerctl feed transform`
+  metadata check so scripts that OpenVAS would ignore are caught before merge.
+- Archive the generated feed output for inspection after the validation step.
+  The archive should include the generated `.nasl` files and feed metadata files
+  needed by the transform check, such as `plugin_feed_info.inc`.
+- Upload the archive with `actions/upload-artifact@v4` on pull requests and
+  default-branch pushes. Use a stable artifact name such as
+  `generated-nasl-feed`, and fail the job when the archive is missing.
+- The artifact is an inspection artifact, not a release feed package. Release
+  signing, publishing, and distribution policy remain out of scope for this
+  build job.
+
 ## Security Jobs
 
 ### Dependency Policy
@@ -185,6 +209,9 @@ without requiring external services:
   not only library and test targets.
 - OpenAPI validation for `doc/openapi-reference.yml`: catches broken public API
   documentation early.
+- Generated NASL feed archive upload: lets reviewers inspect the exact metadata
+  files produced by the branch and keeps OpenVAS feed-transform compatibility
+  under CI.
 - Dependabot Cargo updates: the repository already has Dependabot, but only for
   devcontainers.
 - A compiler-based coverage report using Rust's `instrument-coverage` support.
