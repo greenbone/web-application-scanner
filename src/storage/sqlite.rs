@@ -55,6 +55,7 @@ impl SqliteStorage {
                 scan_preferences TEXT    NOT NULL DEFAULT '[]',
                 vts              TEXT    NOT NULL DEFAULT '[]',
                 status           TEXT    NOT NULL DEFAULT 'stored',
+                stop_requested   INTEGER NOT NULL DEFAULT 0,
                 queued_time      INTEGER,
                 start_time       INTEGER,
                 end_time         INTEGER,
@@ -181,16 +182,17 @@ impl ScanStorage for SqliteStorage {
 
         sqlx::query(
             "INSERT INTO scans (
-                id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                     id, target, scan_preferences, vts, status, stop_requested, queued_time, start_time, end_time,
                 context_name, context_id, alert_cursor, progress, interruption_reason
              )
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&scan.id)
         .bind(&target_json)
         .bind(&prefs_json)
         .bind(&vts_json)
         .bind(&status_str)
+        .bind(scan.stop_requested)
         .bind(scan.queued_time)
         .bind(scan.start_time)
         .bind(scan.end_time)
@@ -216,6 +218,7 @@ impl ScanStorage for SqliteStorage {
     async fn get_scan(&self, id: &str) -> Result<ScanRecord, StorageError> {
         let row = sqlx::query(
             "SELECT id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                    stop_requested,
                     context_name, context_id, alert_cursor, progress, interruption_reason
              FROM scans WHERE id = ?",
         )
@@ -231,6 +234,7 @@ impl ScanStorage for SqliteStorage {
     async fn list_non_terminal_scans(&self) -> Result<Vec<ScanRecord>, StorageError> {
         let rows = sqlx::query(
             "SELECT id, target, scan_preferences, vts, status, queued_time, start_time, end_time,
+                    stop_requested,
                     context_name, context_id, alert_cursor, progress, interruption_reason
              FROM scans
                WHERE status NOT IN ('succeeded', 'stopped', 'failed')
@@ -254,6 +258,7 @@ impl ScanStorage for SqliteStorage {
         let result = sqlx::query(
             "UPDATE scans
              SET status = ?,
+                 stop_requested = 0,
                  queued_time = COALESCE(?, queued_time),
                  start_time = COALESCE(?, start_time),
                  end_time = COALESCE(?, end_time)
@@ -296,6 +301,7 @@ impl ScanStorage for SqliteStorage {
         let result = sqlx::query(
             "UPDATE scans
              SET status = ?,
+                 stop_requested = 0,
                  queued_time = COALESCE(?, queued_time),
                  start_time = COALESCE(?, start_time),
                  end_time = COALESCE(?, end_time)
@@ -403,6 +409,34 @@ impl ScanStorage for SqliteStorage {
 
         let result = sqlx::query("UPDATE scans SET alert_cursor = ? WHERE id = ?")
             .bind(alert_cursor)
+            .bind(id)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        if result.rows_affected() == 0 {
+            tx.rollback().await.ok();
+            return Err(StorageError::NotFound(id.to_string()));
+        }
+
+        tx.commit()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))
+    }
+
+    async fn update_scan_stop_requested(
+        &self,
+        id: &str,
+        stop_requested: bool,
+    ) -> Result<(), StorageError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| StorageError::Backend(e.to_string()))?;
+
+        let result = sqlx::query("UPDATE scans SET stop_requested = ? WHERE id = ?")
+            .bind(stop_requested)
             .bind(id)
             .execute(&mut *tx)
             .await
@@ -570,6 +604,9 @@ fn scan_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScanRecord, StorageErr
     let status_str: String = row
         .try_get("status")
         .map_err(|e| StorageError::Backend(e.to_string()))?;
+    let stop_requested: bool = row
+        .try_get("stop_requested")
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
     let queued_time: Option<i64> = row
         .try_get("queued_time")
         .map_err(|e| StorageError::Backend(e.to_string()))?;
@@ -601,6 +638,7 @@ fn scan_from_row(row: &sqlx::sqlite::SqliteRow) -> Result<ScanRecord, StorageErr
         scan_preferences: prefs_from_db(&prefs_json)?,
         vts: vts_from_db(&vts_json)?,
         status: status_from_db(&status_str)?,
+        stop_requested,
         queued_time,
         start_time,
         end_time,

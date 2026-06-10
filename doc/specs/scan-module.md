@@ -81,10 +81,11 @@ The main scan states are:
 - stored
 - requested
 - running
-- stop requested
 - stopped
 - failed
 - succeeded
+
+Stop requests for running scans are represented by a separate boolean flag (`stop_requested`) on the scan model while lifecycle status remains `running` until worker shutdown is finalized.
 
 Overall and and per-target progress within the `running` status is tracked according to the "Progress model" section below.
 
@@ -105,11 +106,11 @@ Allowed transitions are defined below. Any transition not listed here is invalid
 | `requested` | worker picked scan | `running` | Worker starts execution. |
 | `requested` | `stop_scan` command | `stopped` | Scan worker terminated gracefully or scan is removed from queue before execution. |
 | `requested` | worker/internal error | `failed` | Error path for non-terminal states. |
-| `running` | `stop_scan` command | `stop requested` | Stop has been requested; worker should terminate gracefully. |
+| `running` | `stop_scan` command | `running` + `stop_requested=true` | Stop has been requested; worker should terminate gracefully. |
 | `running` | all targets finished + alerts fetched | `succeeded` | Successful completion path. |
 | `running` | worker/internal error | `failed` | Error path for non-terminal states. |
-| `stop requested` | worker stop completed | `stopped` | Finalized user-requested stop. |
-| `stop requested` | worker/internal error while stopping | `failed` | Stop flow failed before clean stop completion. |
+| `running` + `stop_requested=true` | worker stop completed | `stopped` | Finalized user-requested stop. |
+| `running` + `stop_requested=true` | worker/internal error while stopping | `failed` | Stop flow failed before clean stop completion. |
 | `stopped` | none | terminal | No further transitions allowed. |
 | `failed` | none | terminal | No further transitions allowed. |
 | `succeeded` | none | terminal | No further transitions allowed. |
@@ -205,7 +206,7 @@ The `stop_scan` command is not idempotent. Any call for a scan not currently in 
 
 Stopping a `requested` scan will remove it from the queue and set its status to `stopped`.
 
-Stopping a `running` scan will set its status to `stop requested` and request scan workers to stop. Once the scan worker has stopped, it will set the status to `stopped`.
+Stopping a `running` scan will set `stop_requested=true` while keeping status `running`, and request scan workers to stop. Once the scan worker has stopped, it will set the status to `stopped`.
 
 If the scan worker does not stop after a configurable grace period, it should be shut down forcefully and the scan status set to `failed`. The default grace period is 5 minutes.
 

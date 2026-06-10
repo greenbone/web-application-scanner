@@ -13,7 +13,6 @@ pub enum ScanStatus {
     Stored,
     Requested,
     Running,
-    StopRequested,
     Stopped,
     Failed,
     Succeeded,
@@ -32,7 +31,6 @@ impl ScanStatus {
     pub fn stop_command_transition(self) -> Option<Self> {
         match self {
             Self::Requested => Some(Self::Stopped),
-            Self::Running => Some(Self::StopRequested),
             _ => None,
         }
     }

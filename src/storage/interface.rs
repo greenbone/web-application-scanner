@@ -26,6 +26,7 @@ pub struct ScanRecord {
     pub scan_preferences: Vec<ScannerPreference>,
     pub vts: Vec<Vt>,
     pub status: ScanStatus,
+    pub stop_requested: bool,
     pub queued_time: Option<i64>,
     pub start_time: Option<i64>,
     pub end_time: Option<i64>,
@@ -152,6 +153,13 @@ pub trait ScanStorage: Send + Sync {
         &self,
         id: &str,
         alert_cursor: Option<i64>,
+    ) -> Result<(), StorageError>;
+
+    /// Persist stop-requested flag for a running scan.
+    async fn update_scan_stop_requested(
+        &self,
+        id: &str,
+        stop_requested: bool,
     ) -> Result<(), StorageError>;
 
     /// Delete a scan and all of its results.

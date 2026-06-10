@@ -111,6 +111,7 @@ impl ScanService for DefaultScanService {
             scan_preferences: request.scan_preferences,
             vts: request.vts,
             status: ScanStatus::Stored,
+            stop_requested: false,
             queued_time: None,
             start_time: None,
             end_time: None,
@@ -192,30 +193,30 @@ impl ScanService for DefaultScanService {
             .await
             .map_err(Self::map_storage_err)?;
 
-        let requested = if scan_record.status == ScanStatus::Running {
-            ScanStatus::StopRequested
-        } else {
-            ScanStatus::Stopped
-        };
+        match scan_record.status {
+            ScanStatus::Requested => {
+                if let Some(runtime) = &self.runtime {
+                    runtime.remove_queued(id).await;
+                }
 
-        let new_status =
-            scan_record.status
-                .stop_command_transition()
-                .ok_or(ScanServiceError::InvalidTransition {
+                self.scan_state
+                    .transition_status(id, scan_record.status, ScanStatus::Stopped)
+                    .await
+                    .map_err(Self::map_storage_err)?;
+            }
+            ScanStatus::Running => {
+                self.storage
+                    .update_scan_stop_requested(id, true)
+                    .await
+                    .map_err(Self::map_storage_err)?;
+            }
+            _ => {
+                return Err(ScanServiceError::InvalidTransition {
                     from: scan_record.status,
-                    requested,
-                })?;
-
-        if scan_record.status == ScanStatus::Requested {
-            if let Some(runtime) = &self.runtime {
-                runtime.remove_queued(id).await;
+                    requested: ScanStatus::Stopped,
+                });
             }
         }
-
-        self.scan_state
-            .transition_status(id, scan_record.status, new_status)
-            .await
-            .map_err(Self::map_storage_err)?;
 
         Ok(())
     }

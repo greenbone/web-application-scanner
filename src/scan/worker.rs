@@ -156,7 +156,17 @@ impl ScanWorker {
 
         let (context_name, context_id) = self.ensure_context(scan).await?;
 
+        if self.stop_requested(&scan.id).await? {
+            self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+            return Ok(());
+        }
+
         for (index, target) in scan.target.hosts.iter().enumerate() {
+            if self.stop_requested(&scan.id).await? {
+                self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                return Ok(());
+            }
+
             progress.mark_spider_running(index);
             self.scan_state
                 .update_progress(&scan.id, Some(progress.as_value()))
@@ -167,6 +177,12 @@ impl ScanWorker {
                 .await?;
 
             loop {
+                if self.stop_requested(&scan.id).await? {
+                    // TODO: Try to stop the spider scan in ZAP
+                    self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                    return Ok(());
+                }
+
                 match self.zap_client.get_ajax_spider_status().await? {
                     AjaxSpiderStatus::Running => sleep(self.config.scan_poll_interval).await,
                     AjaxSpiderStatus::Stopped => break,
@@ -186,6 +202,12 @@ impl ScanWorker {
             let mut last_alert_poll = Instant::now() - self.config.alert_poll_interval;
 
             loop {
+                if self.stop_requested(&scan.id).await? {
+                    // TODO: Try to stop the active scan in ZAP
+                    self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                    return Ok(());
+                }
+
                 if last_alert_poll.elapsed() >= self.config.alert_poll_interval {
                     self.poll_and_persist_alerts(&scan.id, &context_name).await?;
                     last_alert_poll = Instant::now();
@@ -215,6 +237,12 @@ impl ScanWorker {
         }
 
         self.poll_and_persist_alerts(&scan.id, &context_name).await?;
+
+        if self.stop_requested(&scan.id).await? {
+            self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+            return Ok(());
+        }
+
         if let Err(error) = self.zap_client.remove_context(&context_name).await {
             warn!(scan_id = scan.id, error = %error, "failed to remove ZAP context after successful scan completion");
         }
@@ -222,6 +250,29 @@ impl ScanWorker {
         self.scan_state
             .overwrite_status(&scan.id, ScanStatus::Running, ScanStatus::Succeeded)
             .await?;
+        Ok(())
+    }
+
+    async fn stop_requested(&self, scan_id: &str) -> Result<bool, WorkerError> {
+        let scan: Scan = self.storage.get_scan(scan_id).await?.into();
+        Ok(scan.stop_requested)
+    }
+
+    async fn complete_stop_request(
+        &self,
+        scan_id: &str,
+        context_name: Option<&str>,
+    ) -> Result<(), WorkerError> {
+        if let Some(name) = context_name {
+            if let Err(error) = self.zap_client.remove_context(name).await {
+                warn!(scan_id, error = %error, "failed to remove ZAP context while stopping scan");
+            }
+        }
+
+        self.scan_state
+            .transition_status(scan_id, ScanStatus::Running, ScanStatus::Stopped)
+            .await?;
+
         Ok(())
     }
 

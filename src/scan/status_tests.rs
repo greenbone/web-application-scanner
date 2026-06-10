@@ -20,10 +20,7 @@ fn stop_transition_is_only_allowed_from_requested_or_running() {
         ScanStatus::Requested.stop_command_transition(),
         Some(ScanStatus::Stopped)
     );
-    assert_eq!(
-        ScanStatus::Running.stop_command_transition(),
-        Some(ScanStatus::StopRequested)
-    );
+    assert_eq!(ScanStatus::Running.stop_command_transition(), None);
     assert_eq!(ScanStatus::Stored.stop_command_transition(), None);
 }
 
@@ -35,7 +32,6 @@ fn delete_is_only_allowed_for_stored_or_terminal_states() {
     assert!(ScanStatus::Succeeded.can_delete());
     assert!(!ScanStatus::Requested.can_delete());
     assert!(!ScanStatus::Running.can_delete());
-    assert!(!ScanStatus::StopRequested.can_delete());
 }
 
 #[test]

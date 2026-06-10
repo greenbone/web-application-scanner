@@ -40,7 +40,6 @@ fn status_label(status: ScanStatus) -> &'static str {
         ScanStatus::Stored => "stored",
         ScanStatus::Requested => "requested",
         ScanStatus::Running => "running",
-        ScanStatus::StopRequested => "stop_requested",
         ScanStatus::Stopped => "stopped",
         ScanStatus::Failed => "failed",
         ScanStatus::Succeeded => "succeeded",
