@@ -5,18 +5,18 @@
 //! Scan domain primitives and lifecycle transitions.
 
 pub mod errors;
+mod model;
 mod observability;
 pub mod progress;
 pub mod queue;
-mod scan;
 pub mod service;
 mod state_coordinator;
 pub mod status;
 pub mod worker;
 
 pub use errors::ScanServiceError;
+pub use model::{Scan, ScanResult, ScanStatusView};
 pub use progress::ScanProgress;
-pub use scan::{Scan, ScanResult, ScanStatusView};
 pub use service::{CreateScanRequest, DefaultScanService, ScanService, ScanServiceHandle};
 pub use state_coordinator::ScanStateCoordinator;
 pub use status::ScanStatus;
