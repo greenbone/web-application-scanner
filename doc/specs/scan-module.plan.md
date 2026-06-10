@@ -5,9 +5,14 @@ This plan implements the behavior defined in `doc/specs/scan-module.md` with a n
 ## Target Files
 
 - `src/scan/mod.rs` (new)
+- `src/scan/scan.rs` (new, or equivalent domain model file)
 - `src/scan/status.rs` (new)
 - `src/scan/queue.rs` (new)
 - `src/scan/worker.rs` (new)
+- `src/scan/scan_state_coordinator.rs` (new)
+- `src/scan/state_coordinator/mod.rs` (new coordinator module)
+- `src/scan/state_coordinator/execution_state_executor.rs` (new)
+- `src/scan/state_coordinator/transition_executor.rs` (new)
 - `src/scan/progress.rs` (new)
 - `src/scan/retry.rs` (new)
 - `src/scan/errors.rs` (new)
@@ -135,12 +140,28 @@ Implement asynchronous execution with FIFO queue and configurable worker count.
 - If cleanup fails after successful scan completion, keep scan lifecycle status `done` and log warning.
 
 ## Phase 3A: Observability and Telemetry (Unblocked)
+Status: Done (2026-06-10)
 
 Pull forward observability work that does not depend on unfinished phases.
 
 - Emit info logs on every scan lifecycle status transition.
 - Emit info logs for scan creation and scan deletion commands.
 - Emit queue wait time telemetry (`queued` -> `running`).
+
+## Phase 3B: Scan Domain Type and Scan State Coordinator Boundaries
+
+Introduce a scan-domain data model boundary for service contracts.
+
+- Introduce a scan-domain `Scan` type in the scan module and use it as the service contract for scan read/create flows.
+- Keep `storage::ScanRecord` as a persistence-only type and perform mapping at the scan-service/storage boundary.
+- Ensure read endpoints (`get_scan`, `get_scan_status`, `get_scan_result`) return scan-domain types from `ScanService` rather than exposing storage record types.
+- Keep storage schema and persistence extensions in `ScanRecord`, but treat `ScanRecord` as storage-internal.
+- Implement a scan state coordinator module that composes executor submodules used by service and worker paths.
+- Keep the transition executor submodule focused on status persistence + transition telemetry and invoke it via the scan state coordinator.
+- Implement a combined execution-state executor submodule for result batch persistence, alert cursor updates, and progress updates.
+- Invoke the execution-state executor via the scan state coordinator from worker/service code paths.
+- Preserve required ordering semantics in the execution-state executor (for example, alert cursor advancement only after successful result batch persistence).
+- Keep scan-domain `Scan` as a pure domain model while infrastructure side effects remain in executor/facade components.
 
 ## Phase 4: Stop Flow and Interruption Rules
 
@@ -216,6 +237,9 @@ Follow repository sidecar test pattern.
 
 - Add unit tests for all valid transitions.
 - Add unit tests for invalid transitions (must error).
+- Add transition executor submodule tests covering compare-and-swap success, invalid-state/not-found outcomes, and no-telemetry-on-failed-write behavior.
+- Add execution-state executor submodule tests covering result-batch + alert-cursor ordering and progress update routing.
+- Add scan state coordinator tests covering delegation to the transition executor and execution-state executor.
 - Add worker-path tests for:
   - successful completion to `done`
   - queued stop path to `stopped`
@@ -257,6 +281,8 @@ Before opening the implementation PR:
 - `cargo test --locked --all-targets`
 - `cargo clippy --locked --all-targets -- -D warnings`
 - Confirm there is a single canonical scan-domain lifecycle status enum in scan module and no duplicate lifecycle enum in API DTOs.
+- Confirm status transition telemetry is emitted via the transition executor after successful storage mutation.
+- Confirm result persistence, alert cursor updates, and progress updates flow through the execution-state executor via the scan state coordinator.
 - Manual API checks:
   - create -> `new`
   - start (`new`) -> `queued`

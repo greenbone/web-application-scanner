@@ -20,6 +20,45 @@ The scan module assumes requests are already authenticated. Authenticated users 
 
 API handlers are transport adapters only and must not contain scan lifecycle or persistence logic.
 
+## Domain model boundary
+
+The scan module owns a scan-domain `Scan` type used by `ScanService` commands and internal orchestration logic.
+
+The storage layer may use a separate persistence representation (for example `ScanRecord`), but that type is storage-internal and not part of the scan service contract.
+
+Mapping between persistence records and scan-domain values happens at the scan module / storage boundary.
+
+## Scan state coordinator boundary
+
+Scan infrastructure side effects are coordinated through a scan-module scan state coordinator component.
+
+The scan state coordinator composes dedicated infrastructure helpers and provides a single orchestration boundary for:
+- status transition persistence + transition telemetry
+- execution-state persistence
+
+The scan state coordinator keeps these operations consistent across service and worker code paths while preserving transaction guarantees.
+
+Execution-state persistence is handled by a dedicated execution-state executor submodule owned by the scan state coordinator.
+
+In this spec, execution-state refers to persisted scan progress, persisted alert cursor position, and persisted scan results produced while a scan is running.
+
+The execution-state executor is responsible for:
+- result batch persistence
+- alert cursor updates with required ordering relative to result batch persistence
+- progress updates
+- emitting debug logs for progress updates, alert cursor updates, and result persistence operations
+
+## Transition execution boundary
+
+Status transition execution is handled by a transition executor submodule owned by the scan state coordinator.
+
+The transition executor is responsible for:
+- applying persisted status updates (including compare-and-swap transitions)
+- emitting transition telemetry only when the persistence operation succeeds
+- returning typed outcomes for not-found and invalid-state transition attempts
+
+The scan-domain `Scan` type defines transition intent and validity, while the transition executor performs infrastructure side effects.
+
 ## Target definition
 
 Targets are comma-separated lists of HTTP or HTTPS URLs with the following rules:
@@ -50,6 +89,10 @@ The main scan states are:
 Overall and and per-target progress within the `running` status is tracked according to the "Progress model" section below.
 
 All state transitions and progress updates are handled as transactions and persisted. Transactions use shared locks on the scan record to prevent races between concurrent API commands and worker-driven updates.
+
+Transition-triggered status persistence and transition telemetry emission are performed through the transition executor, invoked via the scan state coordinator, to keep behavior consistent across service and worker code paths.
+
+Result batch persistence, alert cursor updates, and progress updates are performed through the execution-state executor, invoked via the scan state coordinator.
 
 ### State transition matrix
 
@@ -127,9 +170,9 @@ Alert polling and context operations do not have dedicated timeouts; transient f
 
 After each poll of the active scan status, the worker also fetches the latest ZAP alerts and converts them into scan results in storage.
 
-The alert-to-result conversion uses a dedicated storage function that accepts multiple alerts and persists all corresponding results in one transaction.
+The alert-to-result conversion uses a dedicated storage function that accepts multiple alerts and persists all corresponding results in one transaction. These writes are coordinated through the execution-state executor, invoked via the scan state coordinator.
 
-The alert cursor must only be advanced after successful commit of the corresponding alert-to-result batch transaction.
+The alert cursor must only be advanced after successful commit of the corresponding alert-to-result batch transaction. Cursor advancement is coordinated through the execution-state executor, invoked via the scan state coordinator.
 
 When all active scans are finished and all alerts are fetched, the ZAP context is removed and the scan status is set to `done`. Failure to remove the context will not alter the status.
 
@@ -174,12 +217,14 @@ If the cleanup of the context fails, the scan status is still set to `stopped`.
 
 The scan module exposes read commands used by scan API endpoints:
 - `get_default_preferences`: returns the available scanner preferences and their default values.
-- `get_scan`: returns persisted scan request data and identifiers for a scan id.
+- `get_scan`: returns the scan-domain `Scan` for a scan id.
 - `get_scan_status`: returns lifecycle status and timestamps for a scan id.
 - `get_result`: returns a single result by scan id and result index.
 - `get_results`: returns a result slice by scan id and optional range.
 
 All scan endpoint data access, including read-only access, is routed through scan module commands rather than calling storage directly from API handlers.
+
+Storage record types are not exposed from scan-module service interfaces.
 
 Storage-backed missing data outcomes are mapped to `ScanNotFound` for missing scans and to a result-not-found service error (or forwarded storage error) for missing result indexes.
 
@@ -225,6 +270,8 @@ For each processed alert page, batch result persistence must succeed before the 
 ## Observability
 
 - State transitions must be logged as informational messages.
+- Transition status logs/telemetry are emitted by the transition executor (via the scan state coordinator) after successful persisted transition updates.
+- Progress updates, alert cursor updates, and result persistence operations must be logged as debug messages by the execution-state executor.
 - Scan creation and scan deletion commands must be logged as informational messages.
 - Queue wait time (time between `queued` and `running`) must be emitted as a telemetry event.
 - Failed ZAP calls must be logged as warnings when the error is transient and retries remain. Once retries are exhausted, they must be logged as errors.
@@ -235,6 +282,9 @@ The following must be covered by unit tests using a mock ZAP client and in-memor
 
 - All valid state transitions.
 - All invalid state transition attempts (must return an error).
+- Transition executor behavior: telemetry is emitted on successful persisted transitions and suppressed for failed transition writes.
+- Execution-state executor behavior: result persistence, alert cursor updates, and progress updates preserve required ordering guarantees.
+- Scan state coordinator behavior: transition execution and execution-state persistence are routed through the appropriate underlying executors.
 - Error paths that result in `interrupted` status.
 - Startup recovery: non-terminal scans are set to `interrupted` on service restart.
 - Alert-to-result mapping, including `Informational -> log`, all other alert risk levels -> `alarm`, URL-derived host and port extraction, and invalid alert URL fallback behavior.
