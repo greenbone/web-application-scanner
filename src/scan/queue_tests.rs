@@ -15,7 +15,7 @@ async fn queue_is_fifo() {
 }
 
 #[tokio::test]
-async fn remove_deletes_queued_scan() {
+async fn remove_deletes_requested_scan() {
     let queue = ScanQueue::new();
     queue.enqueue("scan-1".to_string()).await;
     queue.enqueue("scan-2".to_string()).await;

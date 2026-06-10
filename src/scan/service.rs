@@ -110,7 +110,7 @@ impl ScanService for DefaultScanService {
             target: request.target,
             scan_preferences: request.scan_preferences,
             vts: request.vts,
-            status: ScanStatus::New,
+            status: ScanStatus::Stored,
             queued_time: None,
             start_time: None,
             end_time: None,
@@ -170,7 +170,7 @@ impl ScanService for DefaultScanService {
                 .start_command_transition()
                 .ok_or(ScanServiceError::InvalidTransition {
                     from: scan_record.status,
-                    requested: ScanStatus::Queued,
+                    requested: ScanStatus::Requested,
                 })?;
 
         self.scan_state
@@ -206,7 +206,7 @@ impl ScanService for DefaultScanService {
                     requested,
                 })?;
 
-        if scan_record.status == ScanStatus::Queued {
+        if scan_record.status == ScanStatus::Requested {
             if let Some(runtime) = &self.runtime {
                 runtime.remove_queued(id).await;
             }
