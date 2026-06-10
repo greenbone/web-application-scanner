@@ -17,13 +17,11 @@ use crate::{
     api::dto::scans::ResultType,
     scan::{
         Scan, ScanProgress, ScanResult, ScanStateCoordinator, ScanStatus,
-        observability::emit_queue_wait_telemetry,
-        queue::ScanQueue,
+        observability::emit_queue_wait_telemetry, queue::ScanQueue,
     },
     storage::{StorageError, StorageHandle},
     zapclient::{
-        ZapClient,
-        ZapClientError,
+        ZapClient, ZapClientError,
         ajaxspider::AjaxSpiderStatus,
         alert::{Alert, AlertRiskLevel},
     },
@@ -127,8 +125,7 @@ impl ScanWorker {
             Err(StorageError::InvalidState) | Err(StorageError::NotFound(_)) => {
                 debug!(
                     worker = self.worker_index,
-                    scan_id,
-                    "skipping requested scan that was already handled or removed"
+                    scan_id, "skipping requested scan that was already handled or removed"
                 );
                 return Ok(());
             }
@@ -157,13 +154,15 @@ impl ScanWorker {
         let (context_name, context_id) = self.ensure_context(scan).await?;
 
         if self.stop_requested(&scan.id).await? {
-            self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+            self.complete_stop_request(&scan.id, Some(&context_name))
+                .await?;
             return Ok(());
         }
 
         for (index, target) in scan.target.hosts.iter().enumerate() {
             if self.stop_requested(&scan.id).await? {
-                self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                self.complete_stop_request(&scan.id, Some(&context_name))
+                    .await?;
                 return Ok(());
             }
 
@@ -179,7 +178,8 @@ impl ScanWorker {
             loop {
                 if self.stop_requested(&scan.id).await? {
                     // TODO: Try to stop the spider scan in ZAP
-                    self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                    self.complete_stop_request(&scan.id, Some(&context_name))
+                        .await?;
                     return Ok(());
                 }
 
@@ -204,12 +204,14 @@ impl ScanWorker {
             loop {
                 if self.stop_requested(&scan.id).await? {
                     // TODO: Try to stop the active scan in ZAP
-                    self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+                    self.complete_stop_request(&scan.id, Some(&context_name))
+                        .await?;
                     return Ok(());
                 }
 
                 if last_alert_poll.elapsed() >= self.config.alert_poll_interval {
-                    self.poll_and_persist_alerts(&scan.id, &context_name).await?;
+                    self.poll_and_persist_alerts(&scan.id, &context_name)
+                        .await?;
                     last_alert_poll = Instant::now();
                 }
 
@@ -233,13 +235,16 @@ impl ScanWorker {
             self.scan_state
                 .update_progress(&scan.id, Some(progress.as_value()))
                 .await?;
-            self.poll_and_persist_alerts(&scan.id, &context_name).await?;
+            self.poll_and_persist_alerts(&scan.id, &context_name)
+                .await?;
         }
 
-        self.poll_and_persist_alerts(&scan.id, &context_name).await?;
+        self.poll_and_persist_alerts(&scan.id, &context_name)
+            .await?;
 
         if self.stop_requested(&scan.id).await? {
-            self.complete_stop_request(&scan.id, Some(&context_name)).await?;
+            self.complete_stop_request(&scan.id, Some(&context_name))
+                .await?;
             return Ok(());
         }
 
@@ -294,7 +299,11 @@ impl ScanWorker {
         }
 
         self.scan_state
-            .update_context(&scan.id, Some(context_name.clone()), Some(context_id.clone()))
+            .update_context(
+                &scan.id,
+                Some(context_name.clone()),
+                Some(context_id.clone()),
+            )
             .await?;
 
         Ok((context_name, context_id))

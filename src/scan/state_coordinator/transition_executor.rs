@@ -26,7 +26,9 @@ impl TransitionExecutor {
         from: ScanStatus,
         to: ScanStatus,
     ) -> Result<(), StorageError> {
-        self.storage.transition_scan_status(scan_id, from, to).await?;
+        self.storage
+            .transition_scan_status(scan_id, from, to)
+            .await?;
         emit_status_transition(scan_id, from, to);
         Ok(())
     }

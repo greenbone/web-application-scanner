@@ -163,7 +163,5 @@ fn test_zero_scan_alert_poll_interval_is_error() {
     let result = Settings::load();
     assert!(result.is_err());
     let err = result.err().unwrap();
-    assert!(err
-        .to_string()
-        .contains("scan_alert_poll_interval_seconds"));
+    assert!(err.to_string().contains("scan_alert_poll_interval_seconds"));
 }

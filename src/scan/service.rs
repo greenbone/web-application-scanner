@@ -45,10 +45,7 @@ pub trait ScanService: Send + Sync {
         result_id: i64,
     ) -> Result<ScanResult, ScanServiceError>;
 
-    async fn get_scan_status(
-        &self,
-        id: &str,
-    ) -> Result<ScanStatusView, ScanServiceError>;
+    async fn get_scan_status(&self, id: &str) -> Result<ScanStatusView, ScanServiceError>;
 
     async fn start_scan(&self, id: &str) -> Result<(), ScanServiceError>;
 
@@ -152,10 +149,7 @@ impl ScanService for DefaultScanService {
             .map_err(Self::map_storage_err)
     }
 
-    async fn get_scan_status(
-        &self,
-        id: &str,
-    ) -> Result<ScanStatusView, ScanServiceError> {
+    async fn get_scan_status(&self, id: &str) -> Result<ScanStatusView, ScanServiceError> {
         self.get_scan(id).await.map(|scan| scan.status_view())
     }
 
@@ -166,13 +160,12 @@ impl ScanService for DefaultScanService {
             .await
             .map_err(Self::map_storage_err)?;
 
-        let new_status =
-            scan_record.status
-                .start_command_transition()
-                .ok_or(ScanServiceError::InvalidTransition {
-                    from: scan_record.status,
-                    requested: ScanStatus::Requested,
-                })?;
+        let new_status = scan_record.status.start_command_transition().ok_or(
+            ScanServiceError::InvalidTransition {
+                from: scan_record.status,
+                requested: ScanStatus::Requested,
+            },
+        )?;
 
         self.scan_state
             .transition_status(id, scan_record.status, new_status)
