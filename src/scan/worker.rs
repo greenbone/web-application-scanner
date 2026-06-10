@@ -268,10 +268,10 @@ impl ScanWorker {
         scan_id: &str,
         context_name: Option<&str>,
     ) -> Result<(), WorkerError> {
-        if let Some(name) = context_name {
-            if let Err(error) = self.zap_client.remove_context(name).await {
-                warn!(scan_id, error = %error, "failed to remove ZAP context while stopping scan");
-            }
+        if let Some(name) = context_name
+            && let Err(error) = self.zap_client.remove_context(name).await
+        {
+            warn!(scan_id, error = %error, "failed to remove ZAP context while stopping scan");
         }
 
         self.scan_state
@@ -364,10 +364,10 @@ impl ScanWorker {
             return;
         }
 
-        if let Some(context_name) = scan.context_name.as_deref() {
-            if let Err(error) = self.zap_client.remove_context(context_name).await {
-                warn!(scan_id, error = %error, "failed to remove ZAP context while interrupting scan");
-            }
+        if let Some(context_name) = scan.context_name.as_deref()
+            && let Err(error) = self.zap_client.remove_context(context_name).await
+        {
+            warn!(scan_id, error = %error, "failed to remove ZAP context while interrupting scan");
         }
 
         if let Err(error) = self
