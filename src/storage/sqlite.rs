@@ -7,7 +7,7 @@ use sqlx::{
     Row,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions},
 };
-use std::str::FromStr;
+use std::{str::FromStr, time::{SystemTime, UNIX_EPOCH}};
 
 use crate::{
     api::dto::scans::{ResultType, ScannerPreference, Target, Vt},
@@ -170,6 +170,13 @@ fn progress_from_db(s: Option<&str>) -> Option<serde_json::Value> {
     s.and_then(|value| serde_json::from_str(value).ok())
 }
 
+fn unix_timestamp_now() -> Result<i64, StorageError> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| StorageError::Backend(e.to_string()))?;
+    i64::try_from(duration.as_secs()).map_err(|e| StorageError::Backend(e.to_string()))
+}
+
 // ─── Trait implementation ─────────────────────────────────────────────────────
 
 #[async_trait]
@@ -247,8 +254,24 @@ impl ScanStorage for SqliteStorage {
 
     async fn update_scan_status(&self, id: &str, status: ScanStatus) -> Result<(), StorageError> {
         let status_str = status_to_db(&status);
-        let result = sqlx::query("UPDATE scans SET status = ? WHERE id = ?")
+        let now = unix_timestamp_now()?;
+        let queued_time = matches!(status, ScanStatus::Queued).then_some(now);
+        let start_time = matches!(status, ScanStatus::Running).then_some(now);
+        let end_time = matches!(status, ScanStatus::Done | ScanStatus::Stopped | ScanStatus::Interrupted)
+            .then_some(now);
+
+        let result = sqlx::query(
+            "UPDATE scans
+             SET status = ?,
+                 queued_time = COALESCE(?, queued_time),
+                 start_time = COALESCE(?, start_time),
+                 end_time = COALESCE(?, end_time)
+             WHERE id = ?",
+        )
             .bind(&status_str)
+            .bind(queued_time)
+            .bind(start_time)
+            .bind(end_time)
             .bind(id)
             .execute(&self.pool)
             .await
@@ -266,14 +289,31 @@ impl ScanStorage for SqliteStorage {
         expected: ScanStatus,
         new_status: ScanStatus,
     ) -> Result<(), StorageError> {
+        let now = unix_timestamp_now()?;
+        let queued_time = matches!(new_status, ScanStatus::Queued).then_some(now);
+        let start_time = matches!(new_status, ScanStatus::Running).then_some(now);
+        let end_time =
+            matches!(new_status, ScanStatus::Done | ScanStatus::Stopped | ScanStatus::Interrupted)
+                .then_some(now);
+
         let mut tx = self
             .pool
             .begin()
             .await
             .map_err(|e| StorageError::Backend(e.to_string()))?;
 
-        let result = sqlx::query("UPDATE scans SET status = ? WHERE id = ? AND status = ?")
+        let result = sqlx::query(
+            "UPDATE scans
+             SET status = ?,
+                 queued_time = COALESCE(?, queued_time),
+                 start_time = COALESCE(?, start_time),
+                 end_time = COALESCE(?, end_time)
+             WHERE id = ? AND status = ?",
+        )
             .bind(status_to_db(&new_status))
+            .bind(queued_time)
+            .bind(start_time)
+            .bind(end_time)
             .bind(id)
             .bind(status_to_db(&expected))
             .execute(&mut *tx)

@@ -224,7 +224,8 @@ For each processed alert page, batch result persistence must succeed before the 
 
 ## Observability
 
-- State transitions must be logged as informational messages and emitted as telemetry events.
+- State transitions must be logged as informational messages.
+- Scan creation and scan deletion commands must be logged as informational messages.
 - Queue wait time (time between `queued` and `running`) must be emitted as a telemetry event.
 - Failed ZAP calls must be logged as warnings when the error is transient and retries remain. Once retries are exhausted, they must be logged as errors.
 

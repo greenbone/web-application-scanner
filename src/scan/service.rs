@@ -11,7 +11,10 @@ use uuid::Uuid;
 
 use crate::{
     api::dto::scans::{PreferencesResponse, ScannerPreference, Target, Vt},
-    scan::{ScanRuntimeHandle, ScanServiceError, ScanStatus},
+    scan::{
+        ScanRuntimeHandle, ScanServiceError, ScanStatus,
+        observability::{emit_scan_created, emit_scan_deleted, emit_status_transition},
+    },
     storage::{ResultRecord, ScanRecord, StorageError, StorageHandle},
 };
 
@@ -119,6 +122,8 @@ impl ScanService for DefaultScanService {
             .await
             .map_err(Self::map_storage_err)?;
 
+        emit_scan_created(&id);
+
         Ok(id)
     }
 
@@ -171,6 +176,8 @@ impl ScanService for DefaultScanService {
             .await
             .map_err(Self::map_storage_err)?;
 
+        emit_status_transition(id, scan.status, new_status);
+
         if let Some(runtime) = &self.runtime {
             runtime.enqueue(id.to_string()).await;
         }
@@ -208,7 +215,11 @@ impl ScanService for DefaultScanService {
         self.storage
             .transition_scan_status(id, scan.status, new_status)
             .await
-            .map_err(Self::map_storage_err)
+            .map_err(Self::map_storage_err)?;
+
+        emit_status_transition(id, scan.status, new_status);
+
+        Ok(())
     }
 
     async fn delete_scan(&self, id: &str) -> Result<(), ScanServiceError> {
@@ -228,7 +239,11 @@ impl ScanService for DefaultScanService {
         self.storage
             .delete_scan(id)
             .await
-            .map_err(Self::map_storage_err)
+            .map_err(Self::map_storage_err)?;
+
+        emit_scan_deleted(id);
+
+        Ok(())
     }
 
     async fn get_results(

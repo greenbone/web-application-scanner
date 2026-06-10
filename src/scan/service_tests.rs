@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::sync::Arc;
+use tracing_test::traced_test;
 
 use crate::{
     api::dto::scans::{ResultType, Target},
@@ -45,6 +46,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
     }
 }
 
+#[traced_test]
 #[tokio::test]
 async fn create_scan_persists_new_status() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
@@ -55,8 +57,10 @@ async fn create_scan_persists_new_status() {
 
     assert_eq!(persisted.id, scan_id);
     assert_eq!(persisted.status, ScanStatus::New);
+    assert!(logs_contain("scan created"));
 }
 
+#[traced_test]
 #[tokio::test]
 async fn start_scan_transitions_new_to_queued() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
@@ -70,6 +74,7 @@ async fn start_scan_transitions_new_to_queued() {
 
     let persisted = storage.get_scan("start-scan").await.unwrap();
     assert_eq!(persisted.status, ScanStatus::Queued);
+    assert!(logs_contain("scan status transition"));
 }
 
 #[tokio::test]
@@ -140,6 +145,21 @@ async fn delete_scan_rejects_non_deletable_states() {
             requested: ScanStatus::Queued,
         }
     ));
+}
+
+#[traced_test]
+#[tokio::test]
+async fn delete_scan_emits_info_log() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    storage
+        .create_scan(make_scan("done-delete", ScanStatus::Done))
+        .await
+        .unwrap();
+    let service = DefaultScanService::new_storage_only(storage);
+
+    service.delete_scan("done-delete").await.unwrap();
+
+    assert!(logs_contain("scan deleted"));
 }
 
 #[tokio::test]
