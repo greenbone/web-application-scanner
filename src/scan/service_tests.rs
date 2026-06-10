@@ -250,9 +250,9 @@ async fn get_scan_status_returns_status_and_timestamps() {
     storage.create_scan(scan).await.unwrap();
     let service = DefaultScanService::new_storage_only(storage);
 
-    let (status, start_time, end_time) = service.get_scan_status("scan-status").await.unwrap();
+    let status_view = service.get_scan_status("scan-status").await.unwrap();
 
-    assert_eq!(status, ScanStatus::Running);
-    assert_eq!(start_time, Some(100));
-    assert_eq!(end_time, Some(120));
+    assert_eq!(status_view.status, ScanStatus::Running);
+    assert_eq!(status_view.start_time, Some(100));
+    assert_eq!(status_view.end_time, Some(120));
 }

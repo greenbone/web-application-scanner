@@ -150,6 +150,8 @@ Pull forward observability work that does not depend on unfinished phases.
 
 ## Phase 3B: Scan Domain Type and Scan State Coordinator Boundaries
 
+Status: Done (2026-06-10)
+
 Introduce a scan-domain data model boundary for service contracts.
 
 - Introduce a scan-domain `Scan` type in the scan module and use it as the service contract for scan read/create flows.

@@ -18,7 +18,7 @@ use crate::{
     },
     app::AppState,
     scan::{CreateScanRequest, ScanServiceError},
-    storage::interface::{ResultRecord, StorageError, parse_range},
+    storage::interface::{StorageError, parse_range},
 };
 
 /// Query parameters for the GET `/scans/{id}/results` endpoint.
@@ -63,7 +63,7 @@ fn scan_service_err(e: ScanServiceError) -> Response {
 // ─── Result conversion ────────────────────────────────────────────────────────
 
 /// Convert a storage result record into an API response.
-fn result_response(r: ResultRecord) -> ScanResultResponse {
+fn result_response(r: crate::scan::ScanResult) -> ScanResultResponse {
     ScanResultResponse {
         id: r.id,
         result_type: r.result_type,
@@ -220,10 +220,10 @@ pub async fn get_scan_status(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match state.scan_service.get_scan_status(&id).await {
-        Ok((status, start_time, end_time)) => Json(ScanStatusResponse {
-            status,
-            start_time,
-            end_time,
+        Ok(status_view) => Json(ScanStatusResponse {
+            status: status_view.status,
+            start_time: status_view.start_time,
+            end_time: status_view.end_time,
         })
         .into_response(),
         Err(e) => scan_service_err(e),
