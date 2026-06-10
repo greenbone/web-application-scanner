@@ -50,6 +50,12 @@ Generated files must contain only NASL metadata and the minimal execution stub
 needed by the feed until runtime integration is specified. They must not embed
 ZAP source code or generated prose that is unrelated to the alert.
 
+CI must also preserve the generated feed output as an inspection artifact. The
+artifact should be an archive of the generated `.nasl` files plus feed metadata
+files needed by OpenVAS feed transformation, such as `plugin_feed_info.inc`.
+This artifact is for pull-request and build inspection only; it is not a signed
+or distributable feed package.
+
 Generation is best effort for incomplete ZAP metadata. If an alert has a stable
 `alertid`, a usable title/name, and a valid OID, the generator should still
 write a NASL metadata file even when optional vulnerability fields such as
@@ -317,6 +323,17 @@ Warnings must not prevent writing generated NASL files. The generator may offer
 a strict CI mode, such as `--fail-on-warning`, that exits non-zero after writing
 or dry-running the candidate set, but default generation must produce all NASL
 files that can be rendered without structural errors.
+
+CI validation must run the generated feed through the OpenVAS scanner metadata
+path, not only through NASL syntax validation. The required checks are:
+
+- Run `scannerctl syntax --quiet` for every generated `.nasl` file.
+- Run `scannerctl feed transform --path <generated-feed-dir>` against the
+  generated feed directory.
+- Fail CI if the transform fails, if the transformed VT count does not match the
+  generated NASL file count, or if transformed VTs are missing required metadata
+  such as OID, name, category, family, `creation_date`, `last_modification`,
+  `qod_type`, or `summary`.
 
 ## Open Questions
 
