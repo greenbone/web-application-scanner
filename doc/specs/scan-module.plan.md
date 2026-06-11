@@ -228,17 +228,20 @@ Phase 5 amendments (2026-06-11):
 
 ## Phase 6: Progress Model and Alerts Polling
 
-Implement persisted progress and percentage calculations.
+Implement persisted progress stage tracking and per-host calculations, then expose progress via the HTTP `host_info` model.
 
 - Track per target:
   - spider stage state: pending/running/done
   - spider last state from ZAP: running/stopped
   - active scan stage state: pending/running/done
   - active scan percentage 0..100
-- Compute per-target overall percentage:
-  - `25` if spider is done plus `0.75 * active_scan_percent`
-  - floor to integer
-- Aggregate target progress to scan-level percentage.
+- Compute per-host progress percentage:
+  - `0` if spider is not started
+  - `1` if spider is started but not finished
+  - `floor(25 + 0.75 * active_scan_percent)` once spider is finished
+- Expose progress in HTTP status responses as `host_info` with:
+  - counters: `all`, `excluded`, `dead`, `alive`, `queued`, `finished`
+  - `scanning`: list of `{ host, progress }` objects for currently scanned hosts
 - Poll alerts at configurable interval (default 10 seconds).
 - Use pagination start offset from persisted processed-alert count to avoid duplicates.
 
@@ -312,6 +315,13 @@ Before opening the implementation PR:
 - Confirm there is a single canonical scan-domain lifecycle status enum in scan module and no duplicate lifecycle enum in API DTOs.
 - Confirm status transition telemetry is emitted via the transition executor after successful storage mutation.
 - Confirm result persistence, alert cursor updates, and progress updates flow through the execution-state executor via the scan state coordinator.
+- Confirm progress exposed by `GET /scans/{id}/status` uses `host_info` with fields `all`, `excluded`, `dead`, `alive`, `queued`, `finished`, and `scanning`.
+- Confirm `host_info.scanning` is a list of `{ host, progress }` objects (not strings and not key/value pseudo-maps).
+- Confirm per-host progress rules in runtime output:
+  - `0` when spider is not started
+  - `1` when spider is started but not finished
+  - `floor(25 + 0.75 * active_scan_percent)` after spider finished
+- Confirm no overall/scan-level percentage field is returned in HTTP status responses.
 - Manual API checks:
   - create -> `stored`
   - start (`stored`) -> `requested`

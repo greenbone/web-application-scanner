@@ -5,7 +5,7 @@ The `scan` module manages the state of scans by receiving commands from the scan
 The state of a scan consists of the following:
 - Scan request data such as preferences or target URLs
 - The general activity status, e.g. whether it is stored, requested, running or succeeded
-- The progress of the scan for each target URL, tracking sub-states such as AJAX spider scan or active scan
+- Internal progress state for each target URL, including stage sub-states and derived percentages; HTTP API responses expose this as `host_info`
 - Collected scan results
 
 Started scans are added to queue which will asynchronously start worker threads to perform the actual scan actions.
@@ -88,7 +88,7 @@ The main scan states are:
 
 Stop requests for running scans are represented by a separate boolean flag (`stop_requested`) on the scan model while lifecycle status remains `running` until worker shutdown is finalized.
 
-Overall and and per-target progress within the `running` status is tracked according to the "Progress model" section below.
+Progress within the `running` status is tracked according to the "Progress model" section below.
 
 All state transitions and progress updates are handled as transactions and persisted. Transactions use shared locks on the scan record to prevent races between concurrent API commands and worker-driven updates.
 
@@ -226,7 +226,7 @@ If the cleanup of the context fails, the scan status is still set to `stopped`.
 The scan module exposes read commands used by scan API endpoints:
 - `get_default_preferences`: returns the available scanner preferences and their default values.
 - `get_scan`: returns the scan-domain `Scan` for a scan id.
-- `get_scan_status`: returns lifecycle status and timestamps for a scan id.
+- `get_scan_status`: returns lifecycle status, timestamps, and `host_info` progress data for a scan id when available.
 - `get_result`: returns a single result by scan id and result index.
 - `get_results`: returns a result slice by scan id and optional range.
 
@@ -257,12 +257,24 @@ If all worker slots are occupied, additional started scans remain in `requested`
 
 ## Progress model
 
-Progress is represented internally using the per-target variables: 
-- A state enum (pending, running, done) for each stage of the scan (spider, active scan)
-- The last ZAP state for each each scan stage (`running` or `stopped` for spider, a percentage for active scan).
-- An overall percentage per stage is calculated as follows: 25% if the spider is done + 0.75 times the active scan percentage, rounded down.
+Progress is represented internally using the per-target variables:
+- A state enum (`pending`, `running`, `done`) for each stage of the scan (`spider`, `active_scan`).
+- The last ZAP state for each stage (`running` or `stopped` for spider, a percentage for active scan).
+- A per-host progress percentage calculated as follows:
+	- if the spider stage is not started yet, `progress = 0`
+	- if the spider stage is started but not finished yet, `progress = 1`
+	- once the spider stage is finished, `progress = floor(25 + 0.75 * active_scan_percentage)`
 
-The per-target percentages are also aggregated into an overall percentage of all targets.
+For the HTTP API representation, progress is exposed as `host_info`:
+- `all`: total number of hosts in the scan target scope.
+- `excluded`: number of excluded hosts.
+- `dead`: number of unreachable hosts.
+- `alive`: number of hosts that are reachable and can be scanned.
+- `queued`: number of hosts not yet being processed.
+- `finished`: number of hosts for which scanning is complete.
+- `scanning`: list of hosts where scans are running, each represented as object containing:
+	- `host`: host identifier (string)
+	- `progress`: current per-host progress percentage (`0`-`100`).
 
 ## Alerts polling
 
