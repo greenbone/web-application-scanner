@@ -114,7 +114,11 @@ impl ScanStorage for RecordingStorage {
         Ok(())
     }
 
-    async fn get_result(&self, _scan_id: &str, _result_id: i64) -> Result<ResultRecord, StorageError> {
+    async fn get_result(
+        &self,
+        _scan_id: &str,
+        _result_id: i64,
+    ) -> Result<ResultRecord, StorageError> {
         panic!("not used by this test");
     }
 
@@ -181,7 +185,10 @@ async fn update_progress_routes_to_storage_progress_update() {
     let executor = ExecutionStateExecutor::new(storage.clone());
 
     executor
-        .update_progress("scan-progress", Some(serde_json::json!({ "stage": "spider" })))
+        .update_progress(
+            "scan-progress",
+            Some(serde_json::json!({ "stage": "spider" })),
+        )
         .await
         .unwrap();
 

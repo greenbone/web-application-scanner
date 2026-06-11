@@ -8,7 +8,10 @@ use super::{ScanProgress, StageState};
 
 #[test]
 fn new_creates_pending_targets_with_zero_progress() {
-    let hosts = vec!["http://a.example".to_string(), "http://b.example".to_string()];
+    let hosts = vec![
+        "http://a.example".to_string(),
+        "http://b.example".to_string(),
+    ];
     let progress = ScanProgress::new(&hosts);
 
     assert_eq!(progress.targets.len(), 2);

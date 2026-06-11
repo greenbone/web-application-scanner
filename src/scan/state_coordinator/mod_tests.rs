@@ -86,7 +86,10 @@ async fn persist_alert_batch_delegates_to_execution_state_executor() {
         .unwrap();
 
     let scan = storage.get_scan("scan-delegate-exec").await.unwrap();
-    let results = storage.get_results("scan-delegate-exec", 0, None).await.unwrap();
+    let results = storage
+        .get_results("scan-delegate-exec", 0, None)
+        .await
+        .unwrap();
 
     assert_eq!(scan.alert_cursor, Some(1));
     assert_eq!(results.len(), 1);

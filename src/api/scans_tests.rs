@@ -107,7 +107,11 @@ impl ScanStorage for NullStorage {
         panic!("scan handlers must not use storage directly")
     }
 
-    async fn get_result(&self, _scan_id: &str, _result_id: i64) -> Result<ResultRecord, StorageError> {
+    async fn get_result(
+        &self,
+        _scan_id: &str,
+        _result_id: i64,
+    ) -> Result<ResultRecord, StorageError> {
         panic!("scan handlers must not use storage directly")
     }
 
@@ -426,7 +430,10 @@ async fn get_scan_status_handler_uses_scan_service_facade() {
     .into_response();
 
     assert_eq!(response.status(), StatusCode::OK);
-    assert_eq!(service.calls(), vec!["get_scan_status:scan-789".to_string()]);
+    assert_eq!(
+        service.calls(),
+        vec!["get_scan_status:scan-789".to_string()]
+    );
 }
 
 #[tokio::test]
