@@ -4,7 +4,8 @@
 
 //! Background scan worker runtime.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
 use regex::escape;
 use tokio::{
@@ -16,15 +17,13 @@ use tracing::{debug, error, warn};
 use crate::{
     api::dto::scans::ResultType,
     scan::{
-        Scan, ScanProgress, ScanResult, ScanStateCoordinator, ScanStatus,
-        observability::emit_queue_wait_telemetry, queue::ScanQueue,
+        RetryingScanStateCoordinator, Scan, ScanProgress, ScanResult, ScanStateCoordinator,
+        ScanStatus, observability::emit_queue_wait_telemetry, queue::ScanQueue, retry::IsTransient,
     },
     storage::{StorageError, StorageHandle},
-    zapclient::{
-        ZapClient, ZapClientError,
-        ajaxspider::AjaxSpiderStatus,
-        alert::{Alert, AlertRiskLevel},
-    },
+    zapclient::ajaxspider::AjaxSpiderStatus,
+    zapclient::alert::{Alert, AlertRiskLevel},
+    zapclient::{RetryingZapClient, ZapClient, ZapClientError},
 };
 
 const DEFAULT_SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
@@ -37,6 +36,10 @@ pub struct ScanRuntimeConfig {
     pub scan_poll_interval: Duration,
     pub alert_page_size: u32,
     pub stop_grace_period: Duration,
+    /// Maximum number of retry attempts for transient failures before a scan transitions to `failed`.
+    pub retry_max_retries: u32,
+    /// Maximum backoff delay between retry attempts.
+    pub retry_max_delay: Duration,
 }
 
 impl Default for ScanRuntimeConfig {
@@ -47,6 +50,8 @@ impl Default for ScanRuntimeConfig {
             scan_poll_interval: DEFAULT_SCAN_POLL_INTERVAL,
             alert_page_size: DEFAULT_ALERT_PAGE_SIZE,
             stop_grace_period: Duration::from_secs(300),
+            retry_max_retries: 10,
+            retry_max_delay: Duration::from_secs(60),
         }
     }
 }
@@ -84,7 +89,10 @@ impl ScanRuntimeHandle {
             };
 
             if scan.status == ScanStatus::Running && scan.stop_requested {
-                warn!(scan_id, "scan stop grace period exceeded; transitioning scan to failed");
+                warn!(
+                    scan_id,
+                    "scan stop grace period exceeded; transitioning scan to failed"
+                );
                 if let Err(error) = scan_state
                     .overwrite_status(&scan_id, ScanStatus::Running, ScanStatus::Failed)
                     .await
@@ -104,13 +112,23 @@ pub fn start_scan_runtime(
 ) -> ScanRuntimeHandle {
     let queue = Arc::new(ScanQueue::new());
     let worker_count = config.worker_count.max(1);
+    let retrying_zap = RetryingZapClient::new(
+        zap_client.clone(),
+        config.retry_max_retries,
+        config.retry_max_delay,
+    );
+    let retrying_state = RetryingScanStateCoordinator::new(
+        ScanStateCoordinator::new(storage.clone()),
+        config.retry_max_retries,
+        config.retry_max_delay,
+    );
 
     for worker_index in 0..worker_count {
         let worker = ScanWorker {
             worker_index,
             storage: storage.clone(),
-            scan_state: ScanStateCoordinator::new(storage.clone()),
-            zap_client: zap_client.clone(),
+            scan_state: retrying_state.clone(),
+            zap_client: retrying_zap.clone(),
             queue: queue.clone(),
             config: config.clone(),
         };
@@ -136,8 +154,8 @@ enum RunningStage<'a> {
 struct ScanWorker {
     worker_index: usize,
     storage: StorageHandle,
-    scan_state: ScanStateCoordinator,
-    zap_client: ZapClient,
+    scan_state: RetryingScanStateCoordinator,
+    zap_client: RetryingZapClient,
     queue: Arc<ScanQueue>,
     config: ScanRuntimeConfig,
 }
@@ -190,9 +208,11 @@ impl ScanWorker {
 
     async fn execute_scan(&self, scan: &Scan) -> Result<(), WorkerError> {
         let mut progress = ScanProgress::new(&scan.target.hosts);
-        self.scan_state
-            .update_progress(&scan.id, Some(progress.as_value()))
-            .await?;
+
+        {
+            let pv = progress.as_value();
+            self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+        }
 
         let (context_name, context_id) = self.ensure_context(scan).await?;
 
@@ -210,9 +230,10 @@ impl ScanWorker {
             }
 
             progress.mark_spider_running(index);
-            self.scan_state
-                .update_progress(&scan.id, Some(progress.as_value()))
-                .await?;
+            {
+                let pv = progress.as_value();
+                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+            }
 
             self.zap_client
                 .start_ajax_spider_scan(&context_name, target, true, false)
@@ -225,7 +246,8 @@ impl ScanWorker {
                     return Ok(());
                 }
 
-                match self.zap_client.get_ajax_spider_status().await? {
+                let status = self.zap_client.get_ajax_spider_status().await?;
+                match status {
                     AjaxSpiderStatus::Running => sleep(self.config.scan_poll_interval).await,
                     AjaxSpiderStatus::Stopped => break,
                 }
@@ -233,9 +255,10 @@ impl ScanWorker {
 
             progress.mark_spider_done(index);
             progress.mark_active_scan_running(index);
-            self.scan_state
-                .update_progress(&scan.id, Some(progress.as_value()))
-                .await?;
+            {
+                let pv = progress.as_value();
+                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+            }
 
             let active_scan_id = self
                 .zap_client
@@ -267,9 +290,10 @@ impl ScanWorker {
                     .get_active_scan_status(&active_scan_id)
                     .await?;
                 progress.update_active_scan(index, active_percentage);
-                self.scan_state
-                    .update_progress(&scan.id, Some(progress.as_value()))
-                    .await?;
+                {
+                    let pv = progress.as_value();
+                    self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+                }
 
                 if active_percentage >= 100 {
                     break;
@@ -279,9 +303,10 @@ impl ScanWorker {
             }
 
             progress.mark_active_scan_done(index);
-            self.scan_state
-                .update_progress(&scan.id, Some(progress.as_value()))
-                .await?;
+            {
+                let pv = progress.as_value();
+                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+            }
             self.poll_and_persist_alerts(&scan.id, &context_name)
                 .await?;
         }
@@ -302,6 +327,7 @@ impl ScanWorker {
         self.scan_state
             .overwrite_status(&scan.id, ScanStatus::Running, ScanStatus::Succeeded)
             .await?;
+
         Ok(())
     }
 
@@ -363,13 +389,11 @@ impl ScanWorker {
                 .await?;
         }
 
-        self.scan_state
-            .update_context(
-                &scan.id,
-                Some(context_name.clone()),
-                Some(context_id.clone()),
-            )
-            .await?;
+        {
+            let cn = Some(context_name.clone());
+            let ci = Some(context_id.clone());
+            self.scan_state.update_context(&scan.id, cn, ci).await?;
+        }
 
         Ok((context_name, context_id))
     }
@@ -379,33 +403,30 @@ impl ScanWorker {
         scan_id: &str,
         context_name: &str,
     ) -> Result<(), WorkerError> {
+        let page_size = self.config.alert_page_size;
         loop {
             let scan: Scan = self.storage.get_scan(scan_id).await?.into();
             let cursor = scan.alert_cursor.unwrap_or(0);
             let alerts = self
                 .zap_client
-                .get_alerts(
-                    context_name,
-                    None,
-                    Some(cursor as u32),
-                    Some(self.config.alert_page_size),
-                )
+                .get_alerts(context_name, None, Some(cursor as u32), Some(page_size))
                 .await?;
 
             if alerts.is_empty() {
                 break;
             }
 
-            let results = alerts
+            let results: Vec<ScanResult> = alerts
                 .iter()
                 .map(|alert| alert_to_result(scan_id, alert))
                 .collect();
+            let next_cursor = cursor + alerts.len() as i64;
 
             self.scan_state
-                .persist_alert_batch(scan_id, cursor + alerts.len() as i64, results)
+                .persist_alert_batch(scan_id, next_cursor, results)
                 .await?;
 
-            if alerts.len() < self.config.alert_page_size as usize {
+            if alerts.len() < page_size as usize {
                 break;
             }
         }
@@ -503,6 +524,15 @@ enum WorkerError {
     Storage(#[from] StorageError),
     #[error(transparent)]
     ZapClient(#[from] ZapClientError),
+}
+
+impl IsTransient for WorkerError {
+    fn is_transient(&self) -> bool {
+        match self {
+            WorkerError::Storage(e) => e.is_transient(),
+            WorkerError::ZapClient(e) => e.is_transient(),
+        }
+    }
 }
 
 #[cfg(test)]

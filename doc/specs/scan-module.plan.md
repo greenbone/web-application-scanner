@@ -192,12 +192,15 @@ Phase 4 amendments (2026-06-11):
 
 ## Phase 5: URL Validation and Retry Backoff
 
+Status: Done (2026-06-11)
+
 Implement spec-compliant target validation and resilient external calls.
 
 - Validate comma-separated target URLs:
   - absolute HTTP/HTTPS only
   - trim surrounding whitespace
   - reject user-info
+  - reject query strings
   - reject fragments
   - reject whitespace/control characters in URL
   - reject dot patterns as defined by spec
@@ -208,6 +211,20 @@ Implement spec-compliant target validation and resilient external calls.
   - configurable max delay (default 60 seconds)
 - Use retry for transient storage lock/contention and transient ZAP/network failures.
 - Exhausted retries transition active scan to `failed`.
+
+Phase 5 amendments (2026-06-11):
+
+- Added scan target URL validation in `src/scan/validation.rs` and integrated it into `create_scan` via `validate_target_urls`.
+- Updated validation rules/spec to reject target URLs containing query strings.
+- Added retry helper infrastructure in `src/scan/retry.rs` with transient error classification (`IsTransient`) and exponential backoff.
+- Added configurable retry settings in `src/config/settings.rs`:
+  - `GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES` (default `10`)
+  - `GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS` (default `60`)
+- Wired retry configuration from settings into runtime startup in `src/lib.rs`.
+- Implemented retry wrappers for infrastructure-facing components:
+  - `RetryingZapClient` for transient ZAP/network failures
+  - `RetryingScanStateCoordinator` for transient storage/backend failures
+- Removed worker-level retry closure boilerplate in favor of wrapper-based retrying calls.
 
 ## Phase 6: Progress Model and Alerts Polling
 

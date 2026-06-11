@@ -69,6 +69,7 @@ Targets are comma-separated lists of HTTP or HTTPS URLs with the following rules
 - URLs containing whitespace or control characters are rejected
 - URLs containing user-info (`username:password@host`) are rejected.
 - URLs containing dot patterns are rejected.
+- URLs containing query strings (`?...`) are rejected.
 - URLs containing fragments (`#...`) are rejected.
 
 If a target URL is rejected, an `InvalidUrl` error containing the given URL and the reason for rejection is raised.
@@ -150,6 +151,12 @@ For transient errors such as network errors or unavailable locks a configurable 
 The retry mechanism uses exponential backoff with the delay starting at 1 second. The maximum number of retries is configurable (default: 10 retries) as well as the maximum delay (default: 60 seconds).
 
 On startup, any scans not in the `stored` or a terminal state will be set to `failed` as it is assumed that the service crashed.
+
+### Retry wrapper types decision
+
+Retry behavior for transient external and storage failures is implemented with wrapper types (decorators) around infrastructure-facing components, instead of repeating per-call retry closures in service/worker code.
+
+This keeps retry policy centralized and consistent (same transient-error classification and exponential-backoff behavior), while keeping worker/service call sites focused on scan lifecycle logic.
 
 ### Running scan
 

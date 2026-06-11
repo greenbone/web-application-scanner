@@ -92,6 +92,233 @@ impl ZapClient {
     }
 }
 
+/// ZAP client wrapper that automatically retries operations on transient failures.
+///
+/// Wraps a [`ZapClient`] and applies exponential backoff retry logic to all API calls.
+/// Transient errors (network failures, timeouts) are automatically retried; permanent
+/// errors (invalid arguments, authentication failures) fail immediately.
+#[derive(Debug, Clone)]
+pub struct RetryingZapClient {
+    inner: ZapClient,
+    max_retries: u32,
+    max_delay: std::time::Duration,
+}
+
+impl RetryingZapClient {
+    /// Create a new retrying client from an existing ZAP client.
+    pub fn new(client: ZapClient, max_retries: u32, max_delay: std::time::Duration) -> Self {
+        Self {
+            inner: client,
+            max_retries,
+            max_delay,
+        }
+    }
+
+    /// Start an AJAX spider scan on the given context and target URL.
+    pub async fn start_ajax_spider_scan(
+        &self,
+        context_name: &str,
+        target_url: &str,
+        in_scope: bool,
+        recursive: bool,
+    ) -> Result<(), ZapClientError> {
+        let inner = self.inner.clone();
+        let context = context_name.to_string();
+        let target = target_url.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let context = context.clone();
+                let target = target.clone();
+                async move {
+                    inner
+                        .start_ajax_spider_scan(&context, &target, in_scope, recursive)
+                        .await
+                }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Get the current status of the AJAX spider.
+    pub async fn get_ajax_spider_status(
+        &self,
+    ) -> Result<ajaxspider::AjaxSpiderStatus, ZapClientError> {
+        let inner = self.inner.clone();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                async move { inner.get_ajax_spider_status().await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Stop the AJAX spider scan.
+    pub async fn stop_ajax_spider_scan(&self) -> Result<(), ZapClientError> {
+        let inner = self.inner.clone();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                async move { inner.stop_ajax_spider_scan().await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Start an active scan on the given context and target URL.
+    pub async fn start_active_scan(
+        &self,
+        context_id: &str,
+        target_url: &str,
+        recurse: bool,
+        in_scope: bool,
+    ) -> Result<String, ZapClientError> {
+        let inner = self.inner.clone();
+        let context = context_id.to_string();
+        let target = target_url.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let context = context.clone();
+                let target = target.clone();
+                async move {
+                    inner
+                        .start_active_scan(&context, &target, recurse, in_scope)
+                        .await
+                }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Get the progress percentage (0-100) of an active scan.
+    pub async fn get_active_scan_status(&self, scan_id: &str) -> Result<i32, ZapClientError> {
+        let inner = self.inner.clone();
+        let id = scan_id.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let id = id.clone();
+                async move { inner.get_active_scan_status(&id).await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Stop an active scan.
+    pub async fn stop_active_scan(&self, scan_id: &str) -> Result<(), ZapClientError> {
+        let inner = self.inner.clone();
+        let id = scan_id.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let id = id.clone();
+                async move { inner.stop_active_scan(&id).await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Create a new context with the given name.
+    pub async fn new_context(&self, context_name: &str) -> Result<String, ZapClientError> {
+        let inner = self.inner.clone();
+        let name = context_name.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let name = name.clone();
+                async move { inner.new_context(&name).await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Include a URL pattern in a context.
+    pub async fn include_in_context(
+        &self,
+        context_name: &str,
+        url_pattern: &str,
+    ) -> Result<(), ZapClientError> {
+        let inner = self.inner.clone();
+        let context = context_name.to_string();
+        let pattern = url_pattern.to_string();
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let context = context.clone();
+                let pattern = pattern.clone();
+                async move { inner.include_in_context(&context, &pattern).await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Fetch alerts from a context.
+    pub async fn get_alerts(
+        &self,
+        context_name: &str,
+        base_url: Option<&str>,
+        start: Option<u32>,
+        count: Option<u32>,
+    ) -> Result<Vec<alert::Alert>, ZapClientError> {
+        let inner = self.inner.clone();
+        let context = context_name.to_string();
+        let base = base_url.map(|s| s.to_string());
+
+        crate::scan::retry::with_retry(
+            move || {
+                let inner = inner.clone();
+                let context = context.clone();
+                let base = base.clone();
+                async move {
+                    inner
+                        .get_alerts(&context, base.as_deref(), start, count)
+                        .await
+                }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Remove a context by name. This operation is **not retried** as cleanup
+    /// operations are typically best-effort.
+    pub async fn remove_context(&self, context_name: &str) -> Result<(), ZapClientError> {
+        self.inner.remove_context(context_name).await
+    }
+
+    /// Get a reference to the inner [`ZapClient`] for direct access when retries are not desired.
+    pub fn inner(&self) -> &ZapClient {
+        &self.inner
+    }
+}
+
 #[cfg(test)]
 #[path = "zapclient_tests.rs"]
 mod zapclient_tests;

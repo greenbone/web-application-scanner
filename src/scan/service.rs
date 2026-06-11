@@ -15,6 +15,7 @@ use crate::{
         Scan, ScanResult, ScanRuntimeHandle, ScanServiceError, ScanStateCoordinator, ScanStatus,
         ScanStatusView,
         observability::{emit_scan_created, emit_scan_deleted},
+        validation::validate_target_urls,
     },
     storage::{StorageError, StorageHandle},
 };
@@ -101,10 +102,14 @@ impl ScanService for DefaultScanService {
     }
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
+        let validated_hosts = validate_target_urls(&request.target.hosts)?;
         let id = Uuid::new_v4().to_string();
         let scan = Scan {
             id: id.clone(),
-            target: request.target,
+            target: Target {
+                hosts: validated_hosts,
+                ..request.target
+            },
             scan_preferences: request.scan_preferences,
             vts: request.vts,
             status: ScanStatus::Stored,

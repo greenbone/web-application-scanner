@@ -510,6 +510,7 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
@@ -558,6 +559,7 @@ async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
@@ -588,6 +590,7 @@ async fn runtime_keeps_succeeded_status_when_context_cleanup_fails() {
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
@@ -660,6 +663,7 @@ async fn runtime_stop_running_scan_transitions_to_stopped_and_clears_stop_reques
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
@@ -694,6 +698,7 @@ async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
@@ -727,6 +732,7 @@ async fn runtime_forces_failed_when_stop_grace_period_expires() {
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
             stop_grace_period: Duration::from_millis(50),
+            ..ScanRuntimeConfig::default()
         },
     );
     let service = DefaultScanService::new(storage.clone(), runtime);
