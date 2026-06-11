@@ -167,6 +167,8 @@ Introduce a scan-domain data model boundary for service contracts.
 
 ## Phase 4: Stop Flow and Stop-Request Flag
 
+Status: Done (2026-06-11)
+
 Implement strict stop semantics for requested and running scans.
 
 - `requested` + stop:
@@ -179,6 +181,14 @@ Implement strict stop semantics for requested and running scans.
 - Add configurable stop grace period (default 5 minutes):
   - if exceeded, force stop and transition to `failed`
 - If ZAP stop actions fail non-transiently, transition to `failed`.
+
+Phase 4 amendments (2026-06-11):
+
+- Routed `running` scan stop-request persistence through the scan state coordinator execution-state path (`stop_requested=true`) and kept runtime handle responsibilities focused on grace-period enforcement.
+- Added configurable stop grace period setting `GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS` with default `300` seconds.
+- Added worker-side graceful stop actions for in-flight spider/active scan operations by calling ZAP stop endpoints before finalizing `running` -> `stopped`.
+- Added forced-failure handling when stop grace period expires while scan remains `running` with `stop_requested=true`.
+- Added failure handling for non-success ZAP stop actions, transitioning scans to `failed`.
 
 ## Phase 5: URL Validation and Retry Backoff
 

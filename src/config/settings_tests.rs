@@ -19,6 +19,7 @@ fn clear_env() {
         env::remove_var("GREENBONE_WAS_ZAP_API_KEY");
         env::remove_var("GREENBONE_WAS_SCAN_WORKER_COUNT");
         env::remove_var("GREENBONE_WAS_SCAN_ALERT_POLL_INTERVAL_SECONDS");
+        env::remove_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS");
     }
 }
 
@@ -46,6 +47,10 @@ fn test_uses_defaults_when_env_is_unset() {
         settings.scan_alert_poll_interval_seconds,
         settings::DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS
     );
+    assert_eq!(
+        settings.scan_stop_grace_period_seconds,
+        settings::DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS
+    );
 }
 
 #[test]
@@ -62,6 +67,7 @@ fn test_uses_env_overrides_when_set() {
         env::set_var("GREENBONE_WAS_ZAP_API_KEY", "non-default-api-key");
         env::set_var("GREENBONE_WAS_SCAN_WORKER_COUNT", "3");
         env::set_var("GREENBONE_WAS_SCAN_ALERT_POLL_INTERVAL_SECONDS", "15");
+        env::set_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS", "120");
     };
 
     let settings = Settings::load().expect("Failed to load settings");
@@ -74,6 +80,7 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.zap_api_key, "non-default-api-key");
     assert_eq!(settings.scan_worker_count, 3);
     assert_eq!(settings.scan_alert_poll_interval_seconds, 15);
+    assert_eq!(settings.scan_stop_grace_period_seconds, 120);
 }
 
 #[test]
@@ -164,4 +171,18 @@ fn test_zero_scan_alert_poll_interval_is_error() {
     assert!(result.is_err());
     let err = result.err().unwrap();
     assert!(err.to_string().contains("scan_alert_poll_interval_seconds"));
+}
+
+#[test]
+#[serial]
+fn test_zero_scan_stop_grace_period_is_error() {
+    clear_env();
+    unsafe {
+        env::set_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS", "0");
+    }
+
+    let result = Settings::load();
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("scan_stop_grace_period_seconds"));
 }

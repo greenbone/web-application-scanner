@@ -84,4 +84,14 @@ impl ScanStateCoordinator {
             .persist_alert_batch(scan_id, next_cursor, results)
             .await
     }
+
+    pub async fn update_stop_requested(
+        &self,
+        scan_id: &str,
+        stop_requested: bool,
+    ) -> Result<(), StorageError> {
+        self.execution_state_executor
+            .update_stop_requested(scan_id, stop_requested)
+            .await
+    }
 }

@@ -198,10 +198,25 @@ impl ScanService for DefaultScanService {
                     .map_err(Self::map_storage_err)?;
             }
             ScanStatus::Running => {
-                self.storage
-                    .update_scan_stop_requested(id, true)
-                    .await
-                    .map_err(Self::map_storage_err)?;
+                match self.scan_state.update_stop_requested(id, true).await {
+                    Ok(()) => {}
+                    Err(StorageError::InvalidState) => {
+                        let latest_scan = self
+                            .storage
+                            .get_scan(id)
+                            .await
+                            .map_err(Self::map_storage_err)?;
+                        return Err(ScanServiceError::InvalidTransition {
+                            from: latest_scan.status,
+                            requested: ScanStatus::Stopped,
+                        });
+                    }
+                    Err(error) => return Err(Self::map_storage_err(error)),
+                }
+
+                if let Some(runtime) = &self.runtime {
+                    runtime.request_stop(id.to_string()).await;
+                }
             }
             _ => {
                 return Err(ScanServiceError::InvalidTransition {

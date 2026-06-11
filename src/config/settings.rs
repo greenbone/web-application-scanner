@@ -35,6 +35,9 @@ pub const DEFAULT_SCAN_WORKER_COUNT: usize = 1;
 /// Default alert polling interval in seconds.
 pub const DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS: u64 = 10;
 
+/// Default stop grace period in seconds.
+pub const DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS: u64 = 300;
+
 /// Runtime selection of the storage backend.
 #[derive(Debug, Clone, PartialEq)]
 pub enum StorageBackend {
@@ -62,6 +65,8 @@ pub struct Settings {
     pub scan_worker_count: usize,
     /// Interval in seconds between alert polling attempts during active scans.
     pub scan_alert_poll_interval_seconds: u64,
+    /// Grace period in seconds to wait for running scans to stop before forcing failure.
+    pub scan_stop_grace_period_seconds: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -75,6 +80,7 @@ struct RawSettings {
     zap_api_key: String,
     scan_worker_count: usize,
     scan_alert_poll_interval_seconds: u64,
+    scan_stop_grace_period_seconds: u64,
 }
 
 impl Settings {
@@ -107,6 +113,10 @@ impl Settings {
             .set_default(
                 "scan_alert_poll_interval_seconds",
                 DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS,
+            )?
+            .set_default(
+                "scan_stop_grace_period_seconds",
+                DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS,
             )
     }
 
@@ -127,6 +137,12 @@ impl Settings {
         if raw.scan_alert_poll_interval_seconds == 0 {
             return Err(ConfigError::Message(
                 "scan_alert_poll_interval_seconds must be greater than 0".to_string(),
+            ));
+        }
+
+        if raw.scan_stop_grace_period_seconds == 0 {
+            return Err(ConfigError::Message(
+                "scan_stop_grace_period_seconds must be greater than 0".to_string(),
             ));
         }
 
@@ -162,6 +178,7 @@ impl Settings {
             zap_api_key: raw.zap_api_key,
             scan_worker_count: raw.scan_worker_count,
             scan_alert_poll_interval_seconds: raw.scan_alert_poll_interval_seconds,
+            scan_stop_grace_period_seconds: raw.scan_stop_grace_period_seconds,
         })
     }
 }

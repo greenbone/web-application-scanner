@@ -443,15 +443,32 @@ impl ScanStorage for SqliteStorage {
             .await
             .map_err(|e| StorageError::Backend(e.to_string()))?;
 
-        let result = sqlx::query("UPDATE scans SET stop_requested = ? WHERE id = ?")
-            .bind(stop_requested)
-            .bind(id)
-            .execute(&mut *tx)
-            .await
-            .map_err(|e| StorageError::Backend(e.to_string()))?;
+        let result = if stop_requested {
+            sqlx::query("UPDATE scans SET stop_requested = 1 WHERE id = ? AND status = 'running'")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| StorageError::Backend(e.to_string()))?
+        } else {
+            sqlx::query("UPDATE scans SET stop_requested = 0 WHERE id = ?")
+                .bind(id)
+                .execute(&mut *tx)
+                .await
+                .map_err(|e| StorageError::Backend(e.to_string()))?
+        };
 
         if result.rows_affected() == 0 {
+            let exists: Option<i64> = sqlx::query_scalar("SELECT 1 FROM scans WHERE id = ?")
+                .bind(id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(|e| StorageError::Backend(e.to_string()))?;
+
             tx.rollback().await.ok();
+
+            if exists.is_some() {
+                return Err(StorageError::InvalidState);
+            }
             return Err(StorageError::NotFound(id.to_string()));
         }
 

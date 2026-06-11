@@ -52,4 +52,14 @@ impl ExecutionStateExecutor {
             .await?;
         Ok(())
     }
+
+    pub(super) async fn update_stop_requested(
+        &self,
+        scan_id: &str,
+        stop_requested: bool,
+    ) -> Result<(), StorageError> {
+        self.storage
+            .update_scan_stop_requested(scan_id, stop_requested)
+            .await
+    }
 }

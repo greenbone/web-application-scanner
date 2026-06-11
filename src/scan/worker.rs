@@ -36,6 +36,7 @@ pub struct ScanRuntimeConfig {
     pub alert_poll_interval: Duration,
     pub scan_poll_interval: Duration,
     pub alert_page_size: u32,
+    pub stop_grace_period: Duration,
 }
 
 impl Default for ScanRuntimeConfig {
@@ -45,6 +46,7 @@ impl Default for ScanRuntimeConfig {
             alert_poll_interval: Duration::from_secs(10),
             scan_poll_interval: DEFAULT_SCAN_POLL_INTERVAL,
             alert_page_size: DEFAULT_ALERT_PAGE_SIZE,
+            stop_grace_period: Duration::from_secs(300),
         }
     }
 }
@@ -52,6 +54,9 @@ impl Default for ScanRuntimeConfig {
 #[derive(Clone)]
 pub struct ScanRuntimeHandle {
     queue: Arc<ScanQueue>,
+    storage: StorageHandle,
+    scan_state: ScanStateCoordinator,
+    stop_grace_period: Duration,
 }
 
 impl ScanRuntimeHandle {
@@ -61,6 +66,34 @@ impl ScanRuntimeHandle {
 
     pub async fn remove_queued(&self, scan_id: &str) -> bool {
         self.queue.remove(scan_id).await
+    }
+
+    pub async fn request_stop(&self, scan_id: String) {
+        let storage = self.storage.clone();
+        let scan_state = self.scan_state.clone();
+        let stop_grace_period = self.stop_grace_period;
+        let handle: JoinHandle<()> = tokio::spawn(async move {
+            sleep(stop_grace_period).await;
+
+            let scan: Scan = match storage.get_scan(&scan_id).await {
+                Ok(scan_record) => scan_record.into(),
+                Err(error) => {
+                    warn!(scan_id, error = %error, "failed to load scan while enforcing stop grace period");
+                    return;
+                }
+            };
+
+            if scan.status == ScanStatus::Running && scan.stop_requested {
+                warn!(scan_id, "scan stop grace period exceeded; transitioning scan to failed");
+                if let Err(error) = scan_state
+                    .overwrite_status(&scan_id, ScanStatus::Running, ScanStatus::Failed)
+                    .await
+                {
+                    warn!(scan_id, error = %error, "failed to transition timed-out stop request to failed");
+                }
+            }
+        });
+        std::mem::drop(handle);
     }
 }
 
@@ -87,7 +120,17 @@ pub fn start_scan_runtime(
         std::mem::drop(handle);
     }
 
-    ScanRuntimeHandle { queue }
+    ScanRuntimeHandle {
+        queue,
+        storage: storage.clone(),
+        scan_state: ScanStateCoordinator::new(storage),
+        stop_grace_period: config.stop_grace_period,
+    }
+}
+
+enum RunningStage<'a> {
+    Spider,
+    ActiveScan { active_scan_id: &'a str },
 }
 
 struct ScanWorker {
@@ -177,8 +220,7 @@ impl ScanWorker {
 
             loop {
                 if self.stop_requested(&scan.id).await? {
-                    // TODO: Try to stop the spider scan in ZAP
-                    self.complete_stop_request(&scan.id, Some(&context_name))
+                    self.handle_stop_request(&scan.id, Some(&context_name), RunningStage::Spider)
                         .await?;
                     return Ok(());
                 }
@@ -203,9 +245,14 @@ impl ScanWorker {
 
             loop {
                 if self.stop_requested(&scan.id).await? {
-                    // TODO: Try to stop the active scan in ZAP
-                    self.complete_stop_request(&scan.id, Some(&context_name))
-                        .await?;
+                    self.handle_stop_request(
+                        &scan.id,
+                        Some(&context_name),
+                        RunningStage::ActiveScan {
+                            active_scan_id: &active_scan_id,
+                        },
+                    )
+                    .await?;
                     return Ok(());
                 }
 
@@ -279,6 +326,24 @@ impl ScanWorker {
             .await?;
 
         Ok(())
+    }
+
+    async fn handle_stop_request(
+        &self,
+        scan_id: &str,
+        context_name: Option<&str>,
+        running_stage: RunningStage<'_>,
+    ) -> Result<(), WorkerError> {
+        match running_stage {
+            RunningStage::Spider => {
+                self.zap_client.stop_ajax_spider_scan().await?;
+            }
+            RunningStage::ActiveScan { active_scan_id } => {
+                self.zap_client.stop_active_scan(active_scan_id).await?;
+            }
+        }
+
+        self.complete_stop_request(scan_id, context_name).await
     }
 
     async fn ensure_context(&self, scan: &Scan) -> Result<(String, String), WorkerError> {

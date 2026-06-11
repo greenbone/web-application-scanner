@@ -52,6 +52,9 @@ pub async fn run() -> Result<(), AppError> {
             alert_poll_interval: std::time::Duration::from_secs(
                 settings.scan_alert_poll_interval_seconds,
             ),
+            stop_grace_period: std::time::Duration::from_secs(
+                settings.scan_stop_grace_period_seconds,
+            ),
             ..ScanRuntimeConfig::default()
         },
     );

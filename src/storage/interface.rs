@@ -155,7 +155,11 @@ pub trait ScanStorage: Send + Sync {
         alert_cursor: Option<i64>,
     ) -> Result<(), StorageError>;
 
-    /// Persist stop-requested flag for a running scan.
+    /// Persist stop-requested flag.
+    ///
+    /// Setting `stop_requested=true` requires the scan to currently be in
+    /// `running` status and must return [`StorageError::InvalidState`] when the
+    /// status precondition is not met.
     async fn update_scan_stop_requested(
         &self,
         id: &str,

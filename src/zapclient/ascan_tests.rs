@@ -196,3 +196,53 @@ async fn get_active_scan_status_returns_unexpected_content_for_out_of_range_stat
         other => panic!("expected UnexpectedContent error, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn stop_active_scan_posts_to_zap_ascan_stop_endpoint() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/stop"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .and(body_string_contains("scanId=7"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"OK\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    client
+        .stop_active_scan("7")
+        .await
+        .expect("stop_active_scan should succeed when Result is OK");
+}
+
+#[tokio::test]
+async fn stop_active_scan_returns_unexpected_status_on_http_error() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/stop"))
+        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    let error = client
+        .stop_active_scan("7")
+        .await
+        .expect_err("stop_active_scan should fail on non-success status");
+
+    match error {
+        ZapClientError::UnexpectedStatus { status, body } => {
+            assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+            assert_eq!(body, "zap unavailable");
+        }
+        other => panic!("expected UnexpectedStatus error, got {other:?}"),
+    }
+}
