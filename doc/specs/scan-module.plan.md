@@ -278,10 +278,18 @@ Phase 7 amendments (2026-06-11):
 
 ## Phase 8: Observability and Telemetry
 
+Status: Done (2026-06-11)
+
 Complete observability work that depends on retry behavior.
 
 - Log transient ZAP/storage failures as warnings when retries remain.
 - Log retry exhaustion as error before transitioning to `failed`.
+
+Phase 8 amendments (2026-06-11):
+
+- Extended `with_retry` in `src/scan/retry.rs` to emit `warn!` on transient failures when retries remain and `error!` when transient retries are exhausted.
+- Added operation labels to all retry wrapper call sites in `src/zapclient/mod.rs` and `src/scan/state_coordinator/mod.rs` so retry logs identify the failing operation.
+- Added retry observability tests in `src/scan/retry_tests.rs` asserting warning logs for transient retries and error logs for retry exhaustion.
 
 ## Phase 9: Tests
 

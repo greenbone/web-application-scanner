@@ -142,6 +142,7 @@ impl RetryingScanStateCoordinator {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "scan_state.transition_status",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -164,6 +165,7 @@ impl RetryingScanStateCoordinator {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "scan_state.overwrite_status",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -185,6 +187,7 @@ impl RetryingScanStateCoordinator {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "scan_state.update_progress",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -210,6 +213,7 @@ impl RetryingScanStateCoordinator {
         let ci = context_id.clone();
 
         crate::scan::retry::with_retry(
+            "scan_state.update_context",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -234,6 +238,7 @@ impl RetryingScanStateCoordinator {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "scan_state.persist_alert_batch",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -256,6 +261,7 @@ impl RetryingScanStateCoordinator {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "scan_state.update_stop_requested",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();

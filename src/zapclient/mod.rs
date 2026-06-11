@@ -127,6 +127,7 @@ impl RetryingZapClient {
         let target = target_url.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.start_ajax_spider_scan",
             move || {
                 let inner = inner.clone();
                 let context = context.clone();
@@ -150,6 +151,7 @@ impl RetryingZapClient {
         let inner = self.inner.clone();
 
         crate::scan::retry::with_retry(
+            "zap.get_ajax_spider_status",
             move || {
                 let inner = inner.clone();
                 async move { inner.get_ajax_spider_status().await }
@@ -165,6 +167,7 @@ impl RetryingZapClient {
         let inner = self.inner.clone();
 
         crate::scan::retry::with_retry(
+            "zap.stop_ajax_spider_scan",
             move || {
                 let inner = inner.clone();
                 async move { inner.stop_ajax_spider_scan().await }
@@ -188,6 +191,7 @@ impl RetryingZapClient {
         let target = target_url.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.start_active_scan",
             move || {
                 let inner = inner.clone();
                 let context = context.clone();
@@ -210,6 +214,7 @@ impl RetryingZapClient {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.get_active_scan_status",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -227,6 +232,7 @@ impl RetryingZapClient {
         let id = scan_id.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.stop_active_scan",
             move || {
                 let inner = inner.clone();
                 let id = id.clone();
@@ -244,6 +250,7 @@ impl RetryingZapClient {
         let name = context_name.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.new_context",
             move || {
                 let inner = inner.clone();
                 let name = name.clone();
@@ -266,6 +273,7 @@ impl RetryingZapClient {
         let pattern = url_pattern.to_string();
 
         crate::scan::retry::with_retry(
+            "zap.include_in_context",
             move || {
                 let inner = inner.clone();
                 let context = context.clone();
@@ -291,6 +299,7 @@ impl RetryingZapClient {
         let base = base_url.map(|s| s.to_string());
 
         crate::scan::retry::with_retry(
+            "zap.get_alerts",
             move || {
                 let inner = inner.clone();
                 let context = context.clone();

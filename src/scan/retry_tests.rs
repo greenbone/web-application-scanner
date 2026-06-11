@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::time::Duration;
+use tracing_test::traced_test;
 
 use crate::{
     scan::retry::{IsTransient, backoff_delay, with_retry},
@@ -100,6 +101,7 @@ impl IsTransient for FakeError {
 async fn succeeds_on_first_attempt() {
     let mut calls = 0usize;
     let result: Result<i32, FakeError> = with_retry(
+        "retry.test.success_first",
         || {
             calls += 1;
             async { Ok(42) }
@@ -117,6 +119,7 @@ async fn succeeds_on_first_attempt() {
 async fn retries_on_transient_error_and_succeeds() {
     let mut calls = 0usize;
     let result: Result<i32, FakeError> = with_retry(
+        "retry.test.transient_then_success",
         || {
             calls += 1;
             async move {
@@ -140,6 +143,7 @@ async fn retries_on_transient_error_and_succeeds() {
 async fn does_not_retry_permanent_error() {
     let mut calls = 0usize;
     let result: Result<i32, FakeError> = with_retry(
+        "retry.test.permanent_error",
         || {
             calls += 1;
             async { Err(FakeError::Permanent) }
@@ -157,6 +161,7 @@ async fn does_not_retry_permanent_error() {
 async fn exhausts_retries_and_returns_last_error() {
     let mut calls = 0usize;
     let result: Result<i32, FakeError> = with_retry(
+        "retry.test.exhausted",
         || {
             calls += 1;
             async { Err(FakeError::Transient) }
@@ -175,6 +180,7 @@ async fn exhausts_retries_and_returns_last_error() {
 async fn zero_max_retries_does_not_retry() {
     let mut calls = 0usize;
     let result: Result<i32, FakeError> = with_retry(
+        "retry.test.zero_retries",
         || {
             calls += 1;
             async { Err(FakeError::Transient) }
@@ -186,4 +192,50 @@ async fn zero_max_retries_does_not_retry() {
 
     assert_eq!(result, Err(FakeError::Transient));
     assert_eq!(calls, 1);
+}
+
+#[traced_test]
+#[tokio::test]
+async fn logs_warning_when_transient_retry_remains() {
+    let mut calls = 0usize;
+    let result: Result<i32, FakeError> = with_retry(
+        "retry.test.warn_logging",
+        || {
+            calls += 1;
+            async move {
+                if calls == 1 {
+                    Err(FakeError::Transient)
+                } else {
+                    Ok(7)
+                }
+            }
+        },
+        2,
+        Duration::from_millis(1),
+    )
+    .await;
+
+    assert_eq!(result, Ok(7));
+    assert_eq!(calls, 2);
+    assert!(logs_contain("transient failure, retrying operation"));
+}
+
+#[traced_test]
+#[tokio::test]
+async fn logs_error_when_transient_retries_are_exhausted() {
+    let mut calls = 0usize;
+    let result: Result<i32, FakeError> = with_retry(
+        "retry.test.error_logging",
+        || {
+            calls += 1;
+            async { Err(FakeError::Transient) }
+        },
+        0,
+        Duration::from_millis(1),
+    )
+    .await;
+
+    assert_eq!(result, Err(FakeError::Transient));
+    assert_eq!(calls, 1);
+    assert!(logs_contain("retry exhausted for transient operation"));
 }

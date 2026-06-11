@@ -7,6 +7,7 @@
 use std::{future::Future, time::Duration};
 
 use tokio::time::sleep;
+use tracing::{error, warn};
 
 use crate::{storage::StorageError, zapclient::ZapClientError};
 
@@ -55,6 +56,7 @@ pub fn backoff_delay(attempt: u32, max_delay: Duration) -> Duration {
 /// - `max_retries`: maximum number of additional attempts after the first failure.
 /// - `max_delay`: upper bound for the backoff sleep duration.
 pub async fn with_retry<F, Fut, T, E>(
+    operation_name: &'static str,
     mut operation: F,
     max_retries: u32,
     max_delay: Duration,
@@ -62,17 +64,38 @@ pub async fn with_retry<F, Fut, T, E>(
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
-    E: IsTransient,
+    E: IsTransient + std::fmt::Debug,
 {
     let mut attempt = 0u32;
     loop {
         match operation().await {
             Ok(value) => return Ok(value),
             Err(error) => {
-                if !error.is_transient() || attempt >= max_retries {
+                if !error.is_transient() {
                     return Err(error);
                 }
-                sleep(backoff_delay(attempt, max_delay)).await;
+
+                if attempt >= max_retries {
+                    error!(
+                        operation = operation_name,
+                        attempt,
+                        max_retries,
+                        error = ?error,
+                        "retry exhausted for transient operation"
+                    );
+                    return Err(error);
+                }
+
+                let delay = backoff_delay(attempt, max_delay);
+                warn!(
+                    operation = operation_name,
+                    attempt,
+                    max_retries,
+                    backoff_seconds = delay.as_secs_f64(),
+                    error = ?error,
+                    "transient failure, retrying operation"
+                );
+                sleep(delay).await;
                 attempt += 1;
             }
         }
