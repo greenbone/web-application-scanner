@@ -20,6 +20,8 @@ fn clear_env() {
         env::remove_var("GREENBONE_WAS_SCAN_WORKER_COUNT");
         env::remove_var("GREENBONE_WAS_SCAN_ALERT_POLL_INTERVAL_SECONDS");
         env::remove_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS");
+        env::remove_var("GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES");
+        env::remove_var("GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS");
     }
 }
 
@@ -51,6 +53,14 @@ fn test_uses_defaults_when_env_is_unset() {
         settings.scan_stop_grace_period_seconds,
         settings::DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS
     );
+    assert_eq!(
+        settings.scan_retry_max_retries,
+        settings::DEFAULT_SCAN_RETRY_MAX_RETRIES
+    );
+    assert_eq!(
+        settings.scan_retry_max_delay_seconds,
+        settings::DEFAULT_SCAN_RETRY_MAX_DELAY_SECONDS
+    );
 }
 
 #[test]
@@ -68,6 +78,8 @@ fn test_uses_env_overrides_when_set() {
         env::set_var("GREENBONE_WAS_SCAN_WORKER_COUNT", "3");
         env::set_var("GREENBONE_WAS_SCAN_ALERT_POLL_INTERVAL_SECONDS", "15");
         env::set_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS", "120");
+        env::set_var("GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES", "7");
+        env::set_var("GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS", "45");
     };
 
     let settings = Settings::load().expect("Failed to load settings");
@@ -81,6 +93,8 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.scan_worker_count, 3);
     assert_eq!(settings.scan_alert_poll_interval_seconds, 15);
     assert_eq!(settings.scan_stop_grace_period_seconds, 120);
+    assert_eq!(settings.scan_retry_max_retries, 7);
+    assert_eq!(settings.scan_retry_max_delay_seconds, 45);
 }
 
 #[test]

@@ -325,6 +325,14 @@ Phase 9 amendments (2026-06-11):
 - Added an explicit startup-recovery service test for `recover_interrupted_scans` (`requested`/`running` -> `failed`, `stored` unchanged).
 - Remaining Phase 9 checklist items were already covered by existing tests and required no additional implementation changes.
 
+## Phase 10: Configuration Additions Follow-Up
+
+Status: Done (2026-06-11)
+
+Track remaining work from the "Configuration Additions" section after clarifying that config-module settings can be consumed directly by startup/runtime wiring and do not require an `AppState`-specific runtime-config view.
+
+- Add missing config tests for defaults and environment overrides for retry settings (`scan_retry_max_retries`, `scan_retry_max_delay_seconds`) in `src/config/settings_tests.rs`.
+
 ## Configuration Additions
 
 Configuration ownership and flow:
