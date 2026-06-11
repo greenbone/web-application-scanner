@@ -63,3 +63,7 @@ impl ExecutionStateExecutor {
             .await
     }
 }
+
+#[cfg(test)]
+#[path = "execution_state_executor_tests.rs"]
+mod execution_state_executor_tests;

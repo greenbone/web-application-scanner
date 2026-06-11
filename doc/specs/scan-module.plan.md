@@ -293,6 +293,8 @@ Phase 8 amendments (2026-06-11):
 
 ## Phase 9: Tests
 
+Status: Done (2026-06-11)
+
 Follow repository sidecar test pattern.
 
 - Add unit tests for all valid transitions.
@@ -315,6 +317,13 @@ Follow repository sidecar test pattern.
 - Add service tests for read commands (`get_scan`, `get_scan_status`, `get_result`) including not-found behavior.
 - Add API tests confirming scan endpoints use the service facade and keep storage access out of handler logic.
 - Add service/API tests asserting scan creation and deletion emit informational logs.
+
+Phase 9 amendments (2026-06-11):
+
+- Introduced new sidecar test files for coordinator internals (`transition_executor`, `execution_state_executor`, and coordinator delegation), which were not explicitly listed in original file-level planning.
+- Added explicit API transport-boundary tests proving scan handlers use `ScanService` and avoid direct storage access.
+- Added an explicit startup-recovery service test for `recover_interrupted_scans` (`requested`/`running` -> `failed`, `stored` unchanged).
+- Remaining Phase 9 checklist items were already covered by existing tests and required no additional implementation changes.
 
 ## Configuration Additions
 

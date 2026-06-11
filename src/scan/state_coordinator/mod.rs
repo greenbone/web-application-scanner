@@ -278,3 +278,7 @@ impl RetryingScanStateCoordinator {
         &self.inner
     }
 }
+
+#[cfg(test)]
+#[path = "mod_tests.rs"]
+mod mod_tests;

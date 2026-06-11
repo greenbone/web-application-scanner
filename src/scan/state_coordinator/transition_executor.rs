@@ -72,3 +72,7 @@ impl TransitionExecutor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "transition_executor_tests.rs"]
+mod transition_executor_tests;

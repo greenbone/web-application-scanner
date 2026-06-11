@@ -258,3 +258,31 @@ async fn get_scan_status_returns_status_and_timestamps() {
     assert_eq!(status_view.start_time, Some(100));
     assert_eq!(status_view.end_time, Some(120));
 }
+
+#[tokio::test]
+async fn recover_interrupted_scans_transitions_non_terminal_runtime_states_to_failed() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    storage
+        .create_scan(make_scan("scan-stored-recovery", ScanStatus::Stored))
+        .await
+        .unwrap();
+    storage
+        .create_scan(make_scan("scan-requested-recovery", ScanStatus::Requested))
+        .await
+        .unwrap();
+    storage
+        .create_scan(make_scan("scan-running-recovery", ScanStatus::Running))
+        .await
+        .unwrap();
+    let service = DefaultScanService::new_storage_only(storage.clone());
+
+    service.recover_interrupted_scans().await.unwrap();
+
+    let stored = storage.get_scan("scan-stored-recovery").await.unwrap();
+    let requested = storage.get_scan("scan-requested-recovery").await.unwrap();
+    let running = storage.get_scan("scan-running-recovery").await.unwrap();
+
+    assert_eq!(stored.status, ScanStatus::Stored);
+    assert_eq!(requested.status, ScanStatus::Failed);
+    assert_eq!(running.status, ScanStatus::Failed);
+}
