@@ -6,6 +6,7 @@
 
 use crate::{
     api::dto::scans::{ResultType, ScannerPreference, Target, Vt},
+    scan::progress::ScanProgress,
     storage::{ResultRecord, ScanRecord},
 };
 
@@ -31,11 +32,13 @@ pub struct Scan {
 }
 
 /// Scan status read model for service consumers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ScanStatusView {
     pub status: ScanStatus,
     pub start_time: Option<i64>,
     pub end_time: Option<i64>,
+    /// Deserialized progress state, present when the scan has recorded progress.
+    pub progress: Option<ScanProgress>,
 }
 
 /// Scan result domain entity used by service contracts.
@@ -55,10 +58,15 @@ pub struct ScanResult {
 
 impl Scan {
     pub fn status_view(&self) -> ScanStatusView {
+        let progress = self
+            .progress
+            .as_ref()
+            .and_then(|v| serde_json::from_value::<ScanProgress>(v.clone()).ok());
         ScanStatusView {
             status: self.status,
             start_time: self.start_time,
             end_time: self.end_time,
+            progress,
         }
     }
 }

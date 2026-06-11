@@ -4,9 +4,9 @@
 
 //! Persisted scan progress payload.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StageState {
     Pending,
@@ -14,7 +14,7 @@ pub enum StageState {
     Done,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TargetProgress {
     pub target: String,
     pub spider_state: StageState,
@@ -24,7 +24,7 @@ pub struct TargetProgress {
     pub overall_percentage: i32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanProgress {
     pub overall_percentage: i32,
     pub targets: Vec<TargetProgress>,
@@ -94,9 +94,12 @@ impl ScanProgress {
     fn refresh(&mut self) {
         for target in &mut self.targets {
             let spider_done = matches!(target.spider_state, StageState::Done);
+            let spider_running = matches!(target.spider_state, StageState::Running);
             let active_pct = target.active_scan_percentage.clamp(0, 100) as f64;
             target.overall_percentage = if spider_done {
                 (25.0 + (0.75 * active_pct)).floor() as i32
+            } else if spider_running {
+                1
             } else {
                 0
             };
@@ -113,3 +116,7 @@ impl ScanProgress {
         };
     }
 }
+
+#[cfg(test)]
+#[path = "progress_tests.rs"]
+mod progress_tests;

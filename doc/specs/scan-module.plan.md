@@ -228,6 +228,8 @@ Phase 5 amendments (2026-06-11):
 
 ## Phase 6: Progress Model and Alerts Polling
 
+Status: Done (2026-06-11)
+
 Implement persisted progress stage tracking and per-host calculations, then expose progress via the HTTP `host_info` model.
 
 - Track per target:
@@ -244,6 +246,16 @@ Implement persisted progress stage tracking and per-host calculations, then expo
   - `scanning`: list of `{ host, progress }` objects for currently scanned hosts
 - Poll alerts at configurable interval (default 10 seconds).
 - Use pagination start offset from persisted processed-alert count to avoid duplicates.
+
+Phase 6 amendments (2026-06-11):
+
+- Added `Deserialize` to all progress types (`StageState`, `TargetProgress`, `ScanProgress`) so stored JSON progress can be deserialized at read time.
+- Fixed `ScanProgress::refresh()` to return `1` for spider-running state instead of `0` (was returning `0` for both pending and running).
+- Added `HostInfo` and `HostScanningEntry` to `src/api/dto/scans.rs`; added optional `host_info` field to `ScanStatusResponse` (skipped when `None`).
+- Extended `ScanStatusView` in `src/scan/model.rs` with `progress: Option<ScanProgress>`; `Scan::status_view()` now deserializes the stored progress JSON.
+- Updated `GET /scans/{id}/status` handler to map `ScanProgress` to `HostInfo` via `progress_to_host_info()` in `src/api/scans.rs`.
+- `queued` = targets with pending spider; `finished` = targets with active scan done; `scanning` = targets in between; `excluded`/`dead`/`alive` are `0` (host reachability not yet tracked).
+- Alert polling interval was already implemented in Phase 3 (`alert_poll_interval` in worker loop); pagination via persisted `alert_cursor` was already in place.
 
 ## Phase 7: Startup Recovery and Wiring
 

@@ -13,11 +13,11 @@ use serde::Deserialize;
 use crate::{
     api,
     api::dto::scans::{
-        ScanAction, ScanActionRequest, ScanDetailResponse, ScanIdResponse, ScanRequest,
-        ScanResultResponse, ScanStatusResponse,
+        HostInfo, HostScanningEntry, ScanAction, ScanActionRequest, ScanDetailResponse,
+        ScanIdResponse, ScanRequest, ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
-    scan::{CreateScanRequest, ScanServiceError},
+    scan::{CreateScanRequest, ScanProgress, ScanServiceError, progress::StageState},
     storage::interface::{StorageError, parse_range},
 };
 
@@ -220,12 +220,55 @@ pub async fn get_scan_status(
     Path(id): Path<String>,
 ) -> impl IntoResponse {
     match state.scan_service.get_scan_status(&id).await {
-        Ok(status_view) => Json(ScanStatusResponse {
-            status: status_view.status,
-            start_time: status_view.start_time,
-            end_time: status_view.end_time,
-        })
-        .into_response(),
+        Ok(status_view) => {
+            let host_info = status_view.progress.as_ref().map(progress_to_host_info);
+            Json(ScanStatusResponse {
+                status: status_view.status,
+                start_time: status_view.start_time,
+                end_time: status_view.end_time,
+                host_info,
+            })
+            .into_response()
+        }
         Err(e) => scan_service_err(e),
     }
 }
+
+/// Convert persisted [`ScanProgress`] into the [`HostInfo`] API representation.
+fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
+    let all = progress.targets.len() as i32;
+    let queued = progress
+        .targets
+        .iter()
+        .filter(|t| t.spider_state == StageState::Pending)
+        .count() as i32;
+    let finished = progress
+        .targets
+        .iter()
+        .filter(|t| t.active_scan_state == StageState::Done)
+        .count() as i32;
+    let scanning: Vec<HostScanningEntry> = progress
+        .targets
+        .iter()
+        .filter(|t| {
+            t.spider_state != StageState::Pending && t.active_scan_state != StageState::Done
+        })
+        .map(|t| HostScanningEntry {
+            host: t.target.clone(),
+            progress: t.overall_percentage,
+        })
+        .collect();
+    HostInfo {
+        all,
+        excluded: 0,
+        dead: 0,
+        alive: all,
+        queued,
+        finished,
+        scanning,
+    }
+}
+
+#[cfg(test)]
+#[path = "scans_tests.rs"]
+mod scans_tests;
