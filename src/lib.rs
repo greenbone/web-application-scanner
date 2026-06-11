@@ -62,6 +62,10 @@ pub async fn run() -> Result<(), AppError> {
     );
     let scan_service: ScanServiceHandle =
         Arc::new(DefaultScanService::new(storage.clone(), runtime));
+    scan_service
+        .recover_interrupted_scans()
+        .await
+        .map_err(|e| AppError::Storage(e.to_string()))?;
 
     let state = AppState::new(storage, scan_service);
     let router = http::router::build_router(state);

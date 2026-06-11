@@ -34,6 +34,12 @@ pub struct CreateScanRequest {
 /// Internal scan orchestration commands used by transport handlers.
 #[async_trait]
 pub trait ScanService: Send + Sync {
+    /// Recover scans left in a non-terminal, non-stored state from a previous service run.
+    ///
+    /// Called once at startup before the service begins accepting requests. Implementations
+    /// should transition any `requested` or `running` scans to `failed`.
+    async fn recover_interrupted_scans(&self) -> Result<(), ScanServiceError>;
+
     async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError>;
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError>;
@@ -97,6 +103,13 @@ impl DefaultScanService {
 
 #[async_trait]
 impl ScanService for DefaultScanService {
+    async fn recover_interrupted_scans(&self) -> Result<(), ScanServiceError> {
+        self.scan_state
+            .recover_interrupted_scans()
+            .await
+            .map_err(ScanServiceError::Storage)
+    }
+
     async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError> {
         Ok(PreferencesResponse::default())
     }

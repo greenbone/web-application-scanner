@@ -259,6 +259,8 @@ Phase 6 amendments (2026-06-11):
 
 ## Phase 7: Startup Recovery and Wiring
 
+Status: Done (2026-06-11)
+
 Wire scan runtime into service startup.
 
 - In `src/lib.rs` startup path:
@@ -267,6 +269,12 @@ Wire scan runtime into service startup.
   - start worker tasks before serving API traffic
 - Extend `AppState` to include scan service handle and resolved scan-runtime configuration values used by handlers/workers.
 - Keep API module as transport boundary only (HTTP parsing + response mapping).
+
+Phase 7 amendments (2026-06-11):
+
+- Added `run_startup_recovery` in `src/lib.rs` that calls `list_non_terminal_scans()` and transitions each `requested` or `running` scan directly to `failed` with a `warn!` log; `stored` scans are left untouched.
+- Recovery runs after the scan runtime and service are initialized but before `axum::serve` begins accepting connections.
+- `AppState` and `ScanService` wiring was already complete from prior phases; no structural changes were required there.
 
 ## Phase 8: Observability and Telemetry
 

@@ -94,6 +94,15 @@ impl ScanStateCoordinator {
             .update_stop_requested(scan_id, stop_requested)
             .await
     }
+
+    /// Recover scans left in a non-terminal, non-stored state from a previous service run.
+    ///
+    /// Any scan found in `requested` or `running` status at startup is assumed to have been
+    /// interrupted by a crash. Such scans are transitioned directly to `failed`. Scans in
+    /// `stored` status are left untouched.
+    pub async fn recover_interrupted_scans(&self) -> Result<(), StorageError> {
+        self.transition_executor.recover_interrupted_scans().await
+    }
 }
 
 /// Scan state coordinator wrapper that automatically retries operations on transient failures.
