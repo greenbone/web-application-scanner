@@ -280,7 +280,7 @@ impl ScanWorker {
                 }
 
                 if last_alert_poll.elapsed() >= self.config.alert_poll_interval {
-                    self.poll_and_persist_alerts(&scan.id, &context_name)
+                    self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
                         .await?;
                     last_alert_poll = Instant::now();
                 }
@@ -307,11 +307,15 @@ impl ScanWorker {
                 let pv = progress.as_value();
                 self.scan_state.update_progress(&scan.id, Some(pv)).await?;
             }
-            self.poll_and_persist_alerts(&scan.id, &context_name)
+            self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
                 .await?;
         }
 
-        self.poll_and_persist_alerts(&scan.id, &context_name)
+        self.poll_and_persist_alerts(
+            &scan.id,
+            &context_name,
+            scan.target.hosts.last().map(String::as_str),
+        )
             .await?;
 
         if self.stop_requested(&scan.id).await? {
@@ -402,6 +406,7 @@ impl ScanWorker {
         &self,
         scan_id: &str,
         context_name: &str,
+        target_url: Option<&str>,
     ) -> Result<(), WorkerError> {
         let page_size = self.config.alert_page_size;
         loop {
@@ -418,7 +423,7 @@ impl ScanWorker {
 
             let results: Vec<ScanResult> = alerts
                 .iter()
-                .map(|alert| alert_to_result(scan_id, alert))
+                .map(|alert| alert_to_result(scan_id, alert, target_url))
                 .collect();
             let next_cursor = cursor + alerts.len() as i64;
 
@@ -466,7 +471,7 @@ impl ScanWorker {
     }
 }
 
-fn alert_to_result(scan_id: &str, alert: &Alert) -> ScanResult {
+fn alert_to_result(scan_id: &str, alert: &Alert, target_url: Option<&str>) -> ScanResult {
     let parsed_url = reqwest::Url::parse(&alert.url).ok();
     let hostname = parsed_url
         .as_ref()
@@ -498,7 +503,7 @@ fn alert_to_result(scan_id: &str, alert: &Alert) -> ScanResult {
             AlertRiskLevel::Informational => ResultType::Log,
             _ => ResultType::Alarm,
         },
-        ip_address: Some(alert.url.clone()),
+        ip_address: target_url.map(str::to_string),
         hostname,
         oid: Some(alert.plugin_id.clone()),
         port,
