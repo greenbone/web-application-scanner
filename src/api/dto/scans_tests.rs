@@ -189,10 +189,10 @@ fn scan_status_response_omits_host_info_when_none() {
 fn scan_status_response_includes_host_info_when_present() {
     use crate::api::dto::scans::{HostInfo, ScanStatusResponse};
     use std::collections::BTreeMap;
-    
+
     let mut scanning = BTreeMap::new();
     scanning.insert("http://a.example".to_string(), 1);
-    
+
     let response = ScanStatusResponse {
         status: ScanStatus::Running,
         start_time: Some(1000),
@@ -218,10 +218,10 @@ fn scan_status_response_includes_host_info_when_present() {
 fn host_info_round_trips_with_serde_json() {
     use crate::api::dto::scans::HostInfo;
     use std::collections::BTreeMap;
-    
+
     let mut scanning = BTreeMap::new();
     scanning.insert("http://b.example".to_string(), 62);
-    
+
     let info = HostInfo {
         all: 3,
         excluded: 0,

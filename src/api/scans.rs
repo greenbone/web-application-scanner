@@ -13,8 +13,8 @@ use serde::Deserialize;
 use crate::{
     api,
     api::dto::scans::{
-        HostInfo, ScanAction, ScanActionRequest, ScanDetailResponse,
-        ScanRequest, ScanResultResponse, ScanStatusResponse,
+        HostInfo, ScanAction, ScanActionRequest, ScanDetailResponse, ScanRequest,
+        ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
     scan::{CreateScanRequest, ScanProgress, ScanServiceError, progress::StageState},
@@ -238,7 +238,7 @@ pub async fn get_scan_status(
 /// Convert persisted [`ScanProgress`] into the [`HostInfo`] API representation.
 fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
     use std::collections::BTreeMap;
-    
+
     let all = progress.targets.len() as i32;
     let queued = progress
         .targets
@@ -252,7 +252,9 @@ fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
         .count() as i32;
     let mut scanning = BTreeMap::new();
     for target in progress.targets.iter() {
-        if target.spider_state != StageState::Pending && target.active_scan_state != StageState::Done {
+        if target.spider_state != StageState::Pending
+            && target.active_scan_state != StageState::Done
+        {
             scanning.insert(target.target.clone(), target.overall_percentage);
         }
     }

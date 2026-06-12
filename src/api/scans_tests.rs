@@ -15,8 +15,8 @@ use axum::{
 
 use crate::{
     api::dto::scans::{
-        HostInfo, PreferencesResponse, ResultType, ScanAction,
-        ScanActionRequest, ScanRequest, Target,
+        HostInfo, PreferencesResponse, ResultType, ScanAction, ScanActionRequest, ScanRequest,
+        Target,
     },
     app::AppState,
     scan::{

@@ -4,8 +4,8 @@
 
 //! Scan API request and response data transfer objects.
 
-use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::scan::ScanStatus;
 
