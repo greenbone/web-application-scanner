@@ -57,8 +57,8 @@ def test_scan(was_port: int, target: str, report_out: str = "report.json", keep_
             print (f"Response status code: {response.status_code}")
             print (f"Response content: {response.text}")
             return
-        scan_id = response.json().get("id")
-        print (f"Scan creation response: {response.json()}")
+        scan_id = response.json()
+        print (f"Scan creation response: {scan_id}")
         print (f"Scan created with ID: {scan_id}")
 
         # Start the scan

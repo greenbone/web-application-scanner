@@ -473,5 +473,8 @@ async fn create_scan_handler_uses_scan_service_facade() {
     .into_response();
 
     assert_eq!(response.status(), StatusCode::CREATED);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let scan_id = serde_json::from_slice::<String>(&body).unwrap();
+    assert_eq!(scan_id, "scan-from-service");
     assert_eq!(service.calls(), vec!["create_scan".to_string()]);
 }

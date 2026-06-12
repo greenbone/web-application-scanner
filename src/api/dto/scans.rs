@@ -117,13 +117,6 @@ pub enum ResultType {
     HostDetail,
 }
 
-/// Response body for POST /scans – returns the created scan ID.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScanIdResponse {
-    /// The UUID of the newly created scan.
-    pub id: String,
-}
-
 /// Response body for GET /scans/preferences – available scanner preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PreferencesResponse {}

@@ -14,7 +14,7 @@ use crate::{
     api,
     api::dto::scans::{
         HostInfo, HostScanningEntry, ScanAction, ScanActionRequest, ScanDetailResponse,
-        ScanIdResponse, ScanRequest, ScanResultResponse, ScanStatusResponse,
+        ScanRequest, ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
     scan::{CreateScanRequest, ScanProgress, ScanServiceError, progress::StageState},
@@ -108,7 +108,7 @@ pub async fn create_scan(
     };
 
     match state.scan_service.create_scan(request).await {
-        Ok(id) => (StatusCode::CREATED, Json(ScanIdResponse { id })).into_response(),
+        Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
         Err(e) => scan_service_err(e),
     }
 }
