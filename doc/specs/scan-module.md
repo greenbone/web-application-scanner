@@ -272,9 +272,7 @@ For the HTTP API representation, progress is exposed as `host_info`:
 - `alive`: number of hosts that are reachable and could be scanned.
 - `queued`: number of hosts not yet being processed.
 - `finished`: number of hosts for which scanning is complete.
-- `scanning`: list of hosts where scans are running, each represented as object containing:
-	- `host`: host identifier (string)
-	- `progress`: current per-host progress percentage (`0`-`100`).
+- `scanning`: dictionary mapping host identifiers to their current per-host progress percentage (`0`-`100`).
 
 ## Alerts polling
 
