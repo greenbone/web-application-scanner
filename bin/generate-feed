@@ -24,6 +24,7 @@ ZAP_REPO = TMP_DIR / "zaproxy-website"
 ZAP_ALERTS = ZAP_REPO / "site" / "content" / "docs" / "alerts"
 FEED_DIR = TMP_DIR / "feed"
 SCANNERCTL = BIN_DIR / "scannerctl"
+ALERT_INDEX_SCHEMA = ROOT / "doc" / "specs" / "alert-index.json"
 
 ZAP_REPO_URL = os.environ.get(
     "ZAP_REPO_URL", "https://github.com/zaproxy/zaproxy-website.git"
@@ -397,6 +398,178 @@ def check_feed_metadata():
         fail(f"feed metadata validation failed for {FEED_DIR}")
 
 
+def check_alert_index():
+    index_path = FEED_DIR / "alert-index.json"
+    if not index_path.is_file():
+        fail(f"alert index not generated: {index_path}")
+
+    log("checking alert index JSON")
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        schema = json.loads(ALERT_INDEX_SCHEMA.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        fail(f"invalid alert index JSON: {error}")
+
+    errors = validate_json_schema(index, schema, schema)
+    alerts = index.get("alerts")
+    if not isinstance(alerts, list) or not alerts:
+        errors.append("alerts must be a non-empty list")
+    else:
+        for alert in alerts:
+            if not isinstance(alert, dict):
+                errors.append("alert entry must be an object")
+                continue
+            for field in ("id", "oid", "name", "cwe", "cve", "wasc", "references", "source", "raw_frontmatter"):
+                if field not in alert:
+                    errors.append(f"{alert.get('id', '<unknown>')}: missing {field}")
+            if contains_empty_string(alert):
+                errors.append(f"{alert.get('id', '<unknown>')}: contains empty JSON string")
+
+    if errors:
+        for error in errors[:50]:
+            print(f"alert-index error: {error}", file=sys.stderr)
+        if len(errors) > 50:
+            print(f"alert-index error: ... {len(errors) - 50} more", file=sys.stderr)
+        fail(f"alert index validation failed for {index_path}")
+
+
+def validate_json_schema(instance, schema, root, path="$"):
+    if "$ref" in schema:
+        return validate_json_schema(instance, resolve_json_schema_ref(root, schema["$ref"]), root, path)
+
+    errors = []
+
+    if "oneOf" in schema:
+        matches = 0
+        for option in schema["oneOf"]:
+            if not validate_json_schema(instance, option, root, path):
+                matches += 1
+        if matches != 1:
+            errors.append(f"{path}: expected exactly one matching oneOf schema, got {matches}")
+        return errors
+
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"{path}: expected constant {schema['const']!r}")
+
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{path}: expected one of {schema['enum']!r}")
+
+    expected_type = schema.get("type")
+    if expected_type and not json_type_matches(instance, expected_type):
+        errors.append(f"{path}: expected {expected_type}, got {json_type_name(instance)}")
+        return errors
+
+    if isinstance(instance, str):
+        min_length = schema.get("minLength")
+        if min_length is not None and len(instance) < min_length:
+            errors.append(f"{path}: string shorter than minLength {min_length}")
+        pattern = schema.get("pattern")
+        if pattern and re.search(pattern, instance) is None:
+            errors.append(f"{path}: string does not match pattern {pattern!r}")
+        if schema.get("format") == "uri" and not is_uri(instance):
+            errors.append(f"{path}: string is not a valid URI")
+
+    if isinstance(instance, list):
+        min_items = schema.get("minItems")
+        if min_items is not None and len(instance) < min_items:
+            errors.append(f"{path}: array shorter than minItems {min_items}")
+        item_schema = schema.get("items")
+        if item_schema:
+            for index, item in enumerate(instance):
+                errors.extend(validate_json_schema(item, item_schema, root, f"{path}[{index}]"))
+        if schema.get("uniqueItems"):
+            seen = set()
+            for index, item in enumerate(instance):
+                key = json.dumps(item, sort_keys=True, separators=(",", ":"))
+                if key in seen:
+                    errors.append(f"{path}[{index}]: duplicate array item")
+                seen.add(key)
+
+    if isinstance(instance, dict):
+        for field in schema.get("required", []):
+            if field not in instance:
+                errors.append(f"{path}: missing required property {field}")
+
+        properties = schema.get("properties", {})
+        for field, value in instance.items():
+            field_path = f"{path}.{field}"
+            if field in properties:
+                errors.extend(validate_json_schema(value, properties[field], root, field_path))
+            elif schema.get("additionalProperties") is False:
+                errors.append(f"{field_path}: additional property is not allowed")
+            elif isinstance(schema.get("additionalProperties"), dict):
+                errors.extend(
+                    validate_json_schema(
+                        value,
+                        schema["additionalProperties"],
+                        root,
+                        field_path,
+                    )
+                )
+
+    return errors
+
+
+def resolve_json_schema_ref(root, ref):
+    if not ref.startswith("#/"):
+        fail(f"unsupported JSON Schema reference: {ref}")
+    value = root
+    for part in ref[2:].split("/"):
+        value = value[part]
+    return value
+
+
+def json_type_matches(value, expected):
+    if expected == "null":
+        return value is None
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "number":
+        return (isinstance(value, int) or isinstance(value, float)) and not isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "object":
+        return isinstance(value, dict)
+    fail(f"unsupported JSON Schema type: {expected}")
+
+
+def json_type_name(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
+def is_uri(value):
+    parsed = urllib.parse.urlparse(value)
+    return bool(parsed.scheme and (parsed.netloc or parsed.scheme == "urn"))
+
+
+def contains_empty_string(value):
+    if value == "":
+        return True
+    if isinstance(value, list):
+        return any(contains_empty_string(item) for item in value)
+    if isinstance(value, dict):
+        return any(contains_empty_string(item) for item in value.values())
+    return False
+
+
 def main():
     require_command("git")
     require_command("cargo")
@@ -406,6 +579,7 @@ def main():
     generate_feed()
     check_nasl_files()
     check_feed_metadata()
+    check_alert_index()
 
     log("feed generated and validated successfully")
 
