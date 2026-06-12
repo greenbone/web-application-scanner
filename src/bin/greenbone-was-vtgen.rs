@@ -15,6 +15,7 @@ use std::{
 
 use feed::{
     alert_doc::parse_alert_doc,
+    alert_index::generate_alert_index,
     generator::{GenerateConfig, generate_vts},
     validation::ValidationReport,
 };
@@ -50,8 +51,10 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), ExitCode> {
     let config = GenerateConfig {
         version_date: cli.version_date.clone(),
     };
-    let (vts, generation_report) = generate_vts(docs, &config);
+    let (vts, generation_report) = generate_vts(docs.clone(), &config);
     report.extend(generation_report);
+    let (alert_index, index_report) = generate_alert_index(&docs);
+    report.extend(index_report);
 
     report.print();
 
@@ -80,6 +83,18 @@ fn run(args: impl IntoIterator<Item = String>) -> Result<(), ExitCode> {
             eprintln!("error: failed to write {}: {err}", path.display());
             return Err(ExitCode::FAILURE);
         }
+    }
+    let alert_index_path = cli.output.join("alert-index.json");
+    if cli.dry_run {
+        println!("would write {}", alert_index_path.display());
+    } else if let Some(alert_index) = alert_index
+        && let Err(err) = fs::write(&alert_index_path, alert_index)
+    {
+        eprintln!(
+            "error: failed to write {}: {err}",
+            alert_index_path.display()
+        );
+        return Err(ExitCode::FAILURE);
     }
 
     print_summary(input_count, vts.len(), &report, &cli.output, cli.dry_run);

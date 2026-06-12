@@ -53,6 +53,27 @@ Body text.
     assert_eq!(doc.severity_origin.as_deref(), Some("ZAP"));
     assert_eq!(doc.references, ["https://example.com/ref"]);
     assert_eq!(doc.body, "Body text.");
+    assert_eq!(doc.raw_frontmatter["title"], "Missing Header");
+}
+
+#[test]
+fn parser_preserves_empty_raw_frontmatter_values_as_null_for_index_generation() {
+    let doc = parse_alert_doc(
+        Path::new("10020-1.md"),
+        r#"---
+title: "Missing Header"
+alertid: 10020-1
+type: alert
+solution: ""
+---
+Body text.
+"#,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(doc.solution, None);
+    assert_eq!(doc.raw_frontmatter["solution"], serde_json::Value::Null);
 }
 
 #[test]

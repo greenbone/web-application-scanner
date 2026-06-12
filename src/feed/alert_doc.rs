@@ -5,6 +5,7 @@
 use std::{collections::BTreeMap, fmt, path::Path, path::PathBuf, str::FromStr};
 
 use serde::Deserialize;
+use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
 use serde_yaml::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -77,6 +78,7 @@ pub enum AlertKind {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AlertDoc {
     pub path: PathBuf,
+    pub raw_frontmatter: JsonValue,
     pub kind: AlertKind,
     pub alert_id: AlertId,
     pub title: Option<String>,
@@ -147,8 +149,11 @@ pub fn parse_alert_doc(path: &Path, content: &str) -> Result<Option<AlertDoc>, S
     }
 
     let (frontmatter, body) = split_frontmatter(content)?;
-    let raw: Frontmatter =
+    let raw_value: Value =
         serde_yaml::from_str(frontmatter).map_err(|err| format!("malformed YAML: {err}"))?;
+    let raw_frontmatter = yaml_to_json_value(&raw_value)?;
+    let raw: Frontmatter =
+        serde_yaml::from_value(raw_value).map_err(|err| format!("malformed YAML: {err}"))?;
     let kind = match raw.kind.as_deref() {
         Some("alert") => AlertKind::Alert,
         Some("alertset") => AlertKind::AlertSet,
@@ -170,6 +175,7 @@ pub fn parse_alert_doc(path: &Path, content: &str) -> Result<Option<AlertDoc>, S
 
     Ok(Some(AlertDoc {
         path: path.to_path_buf(),
+        raw_frontmatter,
         kind,
         alert_id,
         title: opt_empty_to_none(raw.title),
@@ -272,6 +278,68 @@ fn empty_to_none(value: String) -> Option<String> {
 
 fn opt_empty_to_none(value: Option<String>) -> Option<String> {
     value.and_then(empty_to_none)
+}
+
+fn yaml_to_json_value(value: &Value) -> Result<JsonValue, String> {
+    match value {
+        Value::Null => Ok(JsonValue::Null),
+        Value::Bool(value) => Ok(JsonValue::Bool(*value)),
+        Value::Number(value) => yaml_number_to_json(value),
+        Value::String(value) => {
+            if value.trim().is_empty() {
+                Ok(JsonValue::Null)
+            } else {
+                Ok(JsonValue::String(value.clone()))
+            }
+        }
+        Value::Sequence(values) => values
+            .iter()
+            .map(yaml_to_json_value)
+            .collect::<Result<Vec<_>, _>>()
+            .map(JsonValue::Array),
+        Value::Mapping(values) => {
+            let mut output = JsonMap::new();
+            for (key, value) in values {
+                let key = yaml_key_to_string(key)?;
+                output.insert(key, yaml_to_json_value(value)?);
+            }
+            Ok(JsonValue::Object(output))
+        }
+        Value::Tagged(value) => yaml_to_json_value(&value.value),
+    }
+}
+
+fn yaml_number_to_json(value: &serde_yaml::Number) -> Result<JsonValue, String> {
+    if let Some(value) = value.as_i64() {
+        Ok(JsonValue::Number(JsonNumber::from(value)))
+    } else if let Some(value) = value.as_u64() {
+        Ok(JsonValue::Number(JsonNumber::from(value)))
+    } else if let Some(value) = value.as_f64() {
+        JsonNumber::from_f64(value)
+            .map(JsonValue::Number)
+            .ok_or_else(|| format!("unsupported YAML number: {value}"))
+    } else {
+        Err("unsupported YAML number".to_string())
+    }
+}
+
+fn yaml_key_to_string(value: &Value) -> Result<String, String> {
+    match value {
+        Value::String(value) => Ok(value.clone()),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                Ok(value.to_string())
+            } else if let Some(value) = value.as_u64() {
+                Ok(value.to_string())
+            } else if let Some(value) = value.as_f64() {
+                Ok(value.to_string())
+            } else {
+                Err("unsupported YAML number key".to_string())
+            }
+        }
+        Value::Bool(value) => Ok(value.to_string()),
+        _ => Err("YAML frontmatter object keys must be scalar values".to_string()),
+    }
 }
 
 #[cfg(test)]
