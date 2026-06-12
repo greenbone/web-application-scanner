@@ -262,11 +262,11 @@ fn all_pending_targets_are_queued() {
 }
 
 #[test]
-fn alive_equals_all() {
+fn alive_equals_finished() {
     let progress = make_progress(&["http://a.example", "http://b.example"]);
     let info = progress_to_host_info(&progress);
 
-    assert_eq!(info.alive, info.all);
+    assert_eq!(info.alive, info.finished);
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn mixed_targets_populate_queued_scanning_and_finished_correctly() {
     assert_eq!(info.queued, 1);
     assert_eq!(info.finished, 1);
     assert_eq!(info.scanning.len(), 2);
-    assert_eq!(info.alive, 4);
+    assert_eq!(info.alive, 1);
 
     let spider_entry = info
         .scanning

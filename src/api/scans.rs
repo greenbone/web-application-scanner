@@ -263,7 +263,7 @@ fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
         all,
         excluded: 0,
         dead: 0,
-        alive: all,
+        alive: finished,
         queued,
         finished,
         scanning,

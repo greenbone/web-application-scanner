@@ -269,7 +269,7 @@ For the HTTP API representation, progress is exposed as `host_info`:
 - `all`: total number of hosts in the scan target scope.
 - `excluded`: number of excluded hosts.
 - `dead`: number of unreachable hosts.
-- `alive`: number of hosts that are reachable and can be scanned.
+- `alive`: number of hosts that are reachable and could be scanned.
 - `queued`: number of hosts not yet being processed.
 - `finished`: number of hosts for which scanning is complete.
 - `scanning`: list of hosts where scans are running, each represented as object containing:
