@@ -538,6 +538,7 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
     let results = storage.get_results(&scan_id, 0, None).await.unwrap();
     assert_eq!(results.len(), 1);
     assert!(matches!(results[0].result_type, ResultType::Alarm));
+    assert_eq!(results[0].ip_address.as_deref(), Some("https://example.test"));
     assert_eq!(results[0].oid.as_deref(), Some("10001"));
     assert_eq!(results[0].hostname.as_deref(), Some("example.test"));
     assert_eq!(results[0].port, Some(443));

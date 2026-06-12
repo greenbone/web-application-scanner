@@ -199,7 +199,7 @@ The mapping is defined as follows:
 | parsed `url.host()` | `hostname` | Copy the parsed host name when the alert URL is a valid absolute URL. Otherwise store `null`. |
 | parsed `url.port_or_known_default()` | `port` | Copy the explicit port, or the scheme default (`80` for HTTP, `443` for HTTPS). If the URL cannot be parsed, store `null`. |
 | parsed URL scheme `http` or `https` | `protocol` | Store `tcp`. If the URL cannot be parsed, store `null`. |
-| `url` | `ip_address` | Due to limitations of the scanner API, the `ip_address` field is used as a general main location identifier, so insert the URL here. |
+| current scan target URL | `ip_address` | Store the target URL that is currently being scanned, not the alert URL path. |
 | all current ZAP alert fields | `detail` | Store `null` for alert-derived results to remain aligned with the current OpenAPI contract, which reserves `detail` for `host_detail` results. |
 
 This keeps alert conversion deterministic and compatible with the current public result schema while still preserving the essential ZAP finding data in `type`, `oid`, `hostname`, `port`, `protocol`, and `message`.
