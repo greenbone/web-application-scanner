@@ -26,6 +26,7 @@ pub type ScanServiceHandle = Arc<dyn ScanService>;
 /// Input payload for creating a scan.
 #[derive(Debug, Clone)]
 pub struct CreateScanRequest {
+    pub scan_id: Option<String>,
     pub target: Target,
     pub scan_preferences: Vec<ScannerPreference>,
     pub vts: Vec<Vt>,
@@ -116,7 +117,9 @@ impl ScanService for DefaultScanService {
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
         let validated_hosts = validate_target_urls(&request.target.hosts)?;
-        let id = Uuid::new_v4().to_string();
+        let id = request
+            .scan_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let scan = Scan {
             id: id.clone(),
             target: Target {

@@ -95,12 +95,13 @@ pub async fn head_scans() -> impl IntoResponse {
 
 /// POST /scans — Create a new scan and return its UUID.
 ///
-/// Returns 201 Created with the generated scan ID if successful.
+/// Returns 201 Created with the generated or provided scan ID if successful.
 pub async fn create_scan(
     State(state): State<AppState>,
     Json(req): Json<ScanRequest>,
 ) -> impl IntoResponse {
     let request = CreateScanRequest {
+        scan_id: req.scan_id,
         target: req.target,
         scan_preferences: req.scan_preferences,
         vts: req.vts,

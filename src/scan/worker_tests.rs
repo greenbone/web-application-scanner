@@ -23,6 +23,7 @@ use crate::{
 
 fn make_request(host: &str) -> CreateScanRequest {
     CreateScanRequest {
+        scan_id: None,
         target: Target {
             hosts: vec![host.to_string()],
             excluded_hosts: vec![],

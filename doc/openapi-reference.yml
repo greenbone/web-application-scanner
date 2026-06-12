@@ -338,6 +338,9 @@ components:
       description: "Model representing a scan request."
       type: "object"
       properties:
+        scan_id:
+          description: "An optional scan ID to identify the scan. If not given, a random UUID will be generated and returned in the response."
+          type: "string"
         target:
           $ref: "#/components/schemas/Target"
         scan_preferences:

@@ -12,6 +12,7 @@ use crate::{api::dto::scans::ResultType, scan::ScanStatus};
 #[test]
 fn scan_request_serializes_and_deserializes_with_serde_json() {
     let payload = ScanRequest {
+        scan_id: None,
         target: Target {
             hosts: vec!["https://example.com".to_string()],
             excluded_hosts: vec!["https://example.com/logout".to_string()],
@@ -64,6 +65,7 @@ fn scan_request_round_trips_with_empty_collections() {
     assert_eq!(
         decoded,
         ScanRequest {
+            scan_id: None,
             target: Target {
                 hosts: vec!["https://example.com".to_string()],
                 excluded_hosts: vec![],
@@ -103,6 +105,29 @@ fn scan_action_request_round_trips_with_lowercase_action() {
 
     assert_eq!(json, r#"{"action":"start"}"#);
     assert_eq!(decoded, payload);
+}
+
+#[test]
+fn scan_request_with_scan_id_deserializes_correctly() {
+    let json = r#"{
+        "scan_id": "custom-id-123",
+        "target": {
+            "hosts": ["https://example.com"],
+            "excluded_hosts": [],
+            "credentials": []
+        },
+        "scan_preferences": [],
+        "vts": []
+    }"#;
+
+    let decoded = serde_json::from_str::<ScanRequest>(json)
+        .expect("scan request with scan_id should deserialize");
+
+    assert_eq!(decoded.scan_id, Some("custom-id-123".to_string()));
+    assert_eq!(
+        decoded.target.hosts,
+        vec!["https://example.com".to_string()]
+    );
 }
 
 #[test]

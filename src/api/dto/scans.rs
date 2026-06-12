@@ -11,6 +11,9 @@ use crate::scan::ScanStatus;
 /// Request body for POST /scans — Create a new scan.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanRequest {
+    /// Optional scan ID. If not provided, a random UUID will be generated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan_id: Option<String>,
     /// Target hosts to scan.
     pub target: Target,
     /// Optional scanner preferences.

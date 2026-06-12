@@ -459,6 +459,7 @@ async fn create_scan_handler_uses_scan_service_facade() {
     let response = create_scan(
         State(make_state(service.clone())),
         Json(ScanRequest {
+            scan_id: None,
             target: Target {
                 hosts: vec!["https://example.test".to_string()],
                 excluded_hosts: vec![],
