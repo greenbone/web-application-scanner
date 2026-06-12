@@ -187,7 +187,12 @@ fn scan_status_response_omits_host_info_when_none() {
 
 #[test]
 fn scan_status_response_includes_host_info_when_present() {
-    use crate::api::dto::scans::{HostInfo, HostScanningEntry, ScanStatusResponse};
+    use crate::api::dto::scans::{HostInfo, ScanStatusResponse};
+    use std::collections::BTreeMap;
+
+    let mut scanning = BTreeMap::new();
+    scanning.insert("http://a.example".to_string(), 1);
+
     let response = ScanStatusResponse {
         status: ScanStatus::Running,
         start_time: Some(1000),
@@ -199,23 +204,24 @@ fn scan_status_response_includes_host_info_when_present() {
             alive: 2,
             queued: 1,
             finished: 0,
-            scanning: vec![HostScanningEntry {
-                host: "http://a.example".to_string(),
-                progress: 1,
-            }],
+            scanning,
         }),
     };
     let json = serde_json::to_value(&response).expect("should serialize");
     assert_eq!(json["host_info"]["all"], 2);
     assert_eq!(json["host_info"]["alive"], 2);
     assert_eq!(json["host_info"]["queued"], 1);
-    assert_eq!(json["host_info"]["scanning"][0]["host"], "http://a.example");
-    assert_eq!(json["host_info"]["scanning"][0]["progress"], 1);
+    assert_eq!(json["host_info"]["scanning"]["http://a.example"], 1);
 }
 
 #[test]
 fn host_info_round_trips_with_serde_json() {
-    use crate::api::dto::scans::{HostInfo, HostScanningEntry};
+    use crate::api::dto::scans::HostInfo;
+    use std::collections::BTreeMap;
+
+    let mut scanning = BTreeMap::new();
+    scanning.insert("http://b.example".to_string(), 62);
+
     let info = HostInfo {
         all: 3,
         excluded: 0,
@@ -223,10 +229,7 @@ fn host_info_round_trips_with_serde_json() {
         alive: 3,
         queued: 1,
         finished: 1,
-        scanning: vec![HostScanningEntry {
-            host: "http://b.example".to_string(),
-            progress: 62,
-        }],
+        scanning,
     };
     let json = serde_json::to_string(&info).expect("host info should serialize");
     let decoded = serde_json::from_str::<HostInfo>(&json).expect("host info should deserialize");

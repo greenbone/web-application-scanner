@@ -5,6 +5,7 @@
 //! Scan API request and response data transfer objects.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 use crate::scan::ScanStatus;
 
@@ -165,17 +166,8 @@ pub struct HostInfo {
     pub queued: i32,
     /// Number of hosts for which scanning is complete.
     pub finished: i32,
-    /// Hosts where scans are currently running with their per-host progress.
-    pub scanning: Vec<HostScanningEntry>,
-}
-
-/// A single host currently being scanned, with its progress percentage.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HostScanningEntry {
-    /// Host identifier string.
-    pub host: String,
-    /// Current per-host progress percentage (0–100).
-    pub progress: i32,
+    /// Hosts where scans are currently running, mapped by host identifier to per-host progress percentage.
+    pub scanning: BTreeMap<String, i32>,
 }
 
 /// Response body for GET /scans/{id}/results/{rid} – a single scan result.

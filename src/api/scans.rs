@@ -13,8 +13,8 @@ use serde::Deserialize;
 use crate::{
     api,
     api::dto::scans::{
-        HostInfo, HostScanningEntry, ScanAction, ScanActionRequest, ScanDetailResponse,
-        ScanRequest, ScanResultResponse, ScanStatusResponse,
+        HostInfo, ScanAction, ScanActionRequest, ScanDetailResponse, ScanRequest,
+        ScanResultResponse, ScanStatusResponse,
     },
     app::AppState,
     scan::{CreateScanRequest, ScanProgress, ScanServiceError, progress::StageState},
@@ -237,6 +237,8 @@ pub async fn get_scan_status(
 
 /// Convert persisted [`ScanProgress`] into the [`HostInfo`] API representation.
 fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
+    use std::collections::BTreeMap;
+
     let all = progress.targets.len() as i32;
     let queued = progress
         .targets
@@ -248,22 +250,19 @@ fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
         .iter()
         .filter(|t| t.active_scan_state == StageState::Done)
         .count() as i32;
-    let scanning: Vec<HostScanningEntry> = progress
-        .targets
-        .iter()
-        .filter(|t| {
-            t.spider_state != StageState::Pending && t.active_scan_state != StageState::Done
-        })
-        .map(|t| HostScanningEntry {
-            host: t.target.clone(),
-            progress: t.overall_percentage,
-        })
-        .collect();
+    let mut scanning = BTreeMap::new();
+    for target in progress.targets.iter() {
+        if target.spider_state != StageState::Pending
+            && target.active_scan_state != StageState::Done
+        {
+            scanning.insert(target.target.clone(), target.overall_percentage);
+        }
+    }
     HostInfo {
         all,
         excluded: 0,
         dead: 0,
-        alive: all,
+        alive: finished,
         queued,
         finished,
         scanning,

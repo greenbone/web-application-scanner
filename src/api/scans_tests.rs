@@ -15,8 +15,8 @@ use axum::{
 
 use crate::{
     api::dto::scans::{
-        HostInfo, HostScanningEntry, PreferencesResponse, ResultType, ScanAction,
-        ScanActionRequest, ScanRequest, Target,
+        HostInfo, PreferencesResponse, ResultType, ScanAction, ScanActionRequest, ScanRequest,
+        Target,
     },
     app::AppState,
     scan::{
@@ -262,11 +262,11 @@ fn all_pending_targets_are_queued() {
 }
 
 #[test]
-fn alive_equals_all() {
+fn alive_equals_finished() {
     let progress = make_progress(&["http://a.example", "http://b.example"]);
     let info = progress_to_host_info(&progress);
 
-    assert_eq!(info.alive, info.all);
+    assert_eq!(info.alive, info.finished);
 }
 
 #[test]
@@ -289,13 +289,8 @@ fn spider_running_target_appears_in_scanning_with_progress_1() {
 
     assert_eq!(info.queued, 0);
     assert_eq!(info.finished, 0);
-    assert_eq!(
-        info.scanning,
-        vec![HostScanningEntry {
-            host: "http://a.example".to_string(),
-            progress: 1,
-        }]
-    );
+    assert_eq!(info.scanning.len(), 1);
+    assert_eq!(info.scanning.get("http://a.example"), Some(&1));
 }
 
 // ─── active scan running ──────────────────────────────────────────────────────
@@ -312,8 +307,7 @@ fn active_scan_running_target_appears_in_scanning_with_formula_progress() {
 
     // floor(25 + 0.75 * 50) = 62
     assert_eq!(info.scanning.len(), 1);
-    assert_eq!(info.scanning[0].host, "http://a.example");
-    assert_eq!(info.scanning[0].progress, 62);
+    assert_eq!(info.scanning.get("http://a.example"), Some(&62));
     assert_eq!(info.queued, 0);
     assert_eq!(info.finished, 0);
 }
@@ -364,21 +358,9 @@ fn mixed_targets_populate_queued_scanning_and_finished_correctly() {
     assert_eq!(info.queued, 1);
     assert_eq!(info.finished, 1);
     assert_eq!(info.scanning.len(), 2);
-    assert_eq!(info.alive, 4);
-
-    let spider_entry = info
-        .scanning
-        .iter()
-        .find(|e| e.host == "http://spider.example")
-        .expect("spider.example should be in scanning");
-    assert_eq!(spider_entry.progress, 1);
-
-    let active_entry = info
-        .scanning
-        .iter()
-        .find(|e| e.host == "http://active.example")
-        .expect("active.example should be in scanning");
-    assert_eq!(active_entry.progress, 55);
+    assert_eq!(info.alive, 1);
+    assert_eq!(info.scanning.get("http://spider.example"), Some(&1));
+    assert_eq!(info.scanning.get("http://active.example"), Some(&55));
 }
 
 // ─── empty target list ────────────────────────────────────────────────────────
@@ -397,7 +379,7 @@ fn empty_progress_produces_zeroed_host_info() {
             alive: 0,
             queued: 0,
             finished: 0,
-            scanning: vec![],
+            scanning: std::collections::BTreeMap::new(),
         }
     );
 }
