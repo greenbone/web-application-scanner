@@ -1,0 +1,379 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://greenbone.github.io/web-application-scanner/specs/alert-index.schema.json",
+  "title": "Greenbone WAS ZAP Alert Index",
+  "description": "Machine-readable index of ZAP alert documentation metadata.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "alerts"
+  ],
+  "properties": {
+    "schema_version": {
+      "description": "Schema version of the alert index document.",
+      "type": "integer",
+      "const": 1
+    },
+    "alerts": {
+      "description": "All parsed source alert and alertset documents, sorted by alert ID.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/alert"
+      }
+    }
+  },
+  "$defs": {
+    "alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "oid",
+        "document_type",
+        "name",
+        "cwe",
+        "cve",
+        "wasc",
+        "references",
+        "source",
+        "raw_frontmatter"
+      ],
+      "properties": {
+        "id": {
+          "description": "Source ZAP alert ID, preserving sub-alert suffixes.",
+          "type": "string",
+          "pattern": "^[0-9]+(-[0-9]+)?$"
+        },
+        "oid": {
+          "description": "Dotted numeric OID assigned to this alert.",
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)+$"
+        },
+        "document_type": {
+          "description": "Source document type from the frontmatter.",
+          "type": "string",
+          "enum": [
+            "alert",
+            "alertset"
+          ]
+        },
+        "name": {
+          "description": "Human-readable alert name derived from the source title or name.",
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "description": "Normalized Markdown body text when the source document contains descriptive prose.",
+          "type": "string",
+          "minLength": 1
+        },
+        "alert_index": {
+          "description": "ZAP alertindex value, preserved as a string to avoid numeric precision and formatting loss.",
+          "type": "string",
+          "minLength": 1
+        },
+        "alert_type": {
+          "description": "ZAP alerttype value such as Passive, Active, or Tool.",
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "description": "ZAP documentation status such as release, beta, alpha, or deprecated.",
+          "type": "string",
+          "minLength": 1
+        },
+        "risk": {
+          "description": "ZAP risk label, preserved without CVSS inference.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cvss_base": {
+          "description": "Explicit source-provided CVSS base score, when present.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cvss_base_vector": {
+          "description": "Explicit source-provided CVSS vector, when present.",
+          "type": "string",
+          "minLength": 1
+        },
+        "severity_origin": {
+          "description": "Source-provided severity origin for explicit CVSS metadata.",
+          "type": "string",
+          "minLength": 1
+        },
+        "solution": {
+          "description": "Normalized remediation text. Omitted when the source did not provide a non-empty solution.",
+          "type": "string",
+          "minLength": 1
+        },
+        "other": {
+          "description": "Source detection or additional detail text from the other field.",
+          "type": "string",
+          "minLength": 1
+        },
+        "cwe": {
+          "description": "CWE identifiers normalized with the CWE- prefix.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CWE-[0-9]+$"
+          },
+          "uniqueItems": true
+        },
+        "cve": {
+          "description": "CVE identifiers extracted from source metadata and alert tags.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CVE-[0-9]{4}-[0-9A-Za-z._-]+$"
+          },
+          "uniqueItems": true
+        },
+        "wasc": {
+          "description": "WASC identifiers normalized with the WASC- prefix.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^WASC-[0-9]+$"
+          },
+          "uniqueItems": true
+        },
+        "references": {
+          "description": "External references from the source document.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/reference"
+          },
+          "uniqueItems": true
+        },
+        "tech_tags": {
+          "description": "Technology tags from the source techtags field.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "alert_tags": {
+          "$ref": "#/$defs/alert_tags"
+        },
+        "code": {
+          "description": "Source-code URL from the source document.",
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "help": {
+          "description": "ZAP help URL from the source document.",
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        },
+        "link_text": {
+          "description": "Source linktext value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "date": {
+          "description": "Source creation date value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "last_modified": {
+          "description": "Source lastmod value.",
+          "type": "string",
+          "minLength": 1
+        },
+        "child_alerts": {
+          "description": "Child alert references declared by an alertset source document.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/child_alert"
+          },
+          "uniqueItems": true
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "raw_frontmatter": {
+          "description": "Complete parsed YAML frontmatter from the source document, using original source field names. Empty source strings are represented as null.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          }
+        }
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "description": "Reference type. URL is the only type currently generated.",
+          "type": "string",
+          "enum": [
+            "url"
+          ]
+        },
+        "value": {
+          "description": "Reference value.",
+          "type": "string",
+          "format": "uri",
+          "minLength": 1
+        }
+      }
+    },
+    "alert_tags": {
+      "description": "Raw and categorized ZAP alert tags.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "minLength": 1
+        },
+        "uniqueItems": true
+      },
+      "properties": {
+        "raw": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "cwe": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CWE-[0-9]+$"
+          },
+          "uniqueItems": true
+        },
+        "cve": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^CVE-[0-9]{4}-[0-9A-Za-z._-]+$"
+          },
+          "uniqueItems": true
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "owasp": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        },
+        "policies": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^POLICY_[A-Z0-9_]+$"
+          },
+          "uniqueItems": true
+        },
+        "wstg": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^WSTG-.+$"
+          },
+          "uniqueItems": true
+        },
+        "misc": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "child_alert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[0-9]+(-[0-9]+)?$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "alert_id"
+      ],
+      "properties": {
+        "path": {
+          "description": "Path to the source Markdown document as seen by the generator.",
+          "type": "string",
+          "minLength": 1
+        },
+        "alert_id": {
+          "description": "Original alertid value from the source document, serialized as a string.",
+          "type": "string",
+          "pattern": "^[0-9]+(-[0-9]+)?$"
+        }
+      }
+    },
+    "json_value": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/json_value"
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/json_value"
+          }
+        }
+      ]
+    }
+  }
+}

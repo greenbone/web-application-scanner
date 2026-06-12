@@ -16,3 +16,8 @@ target
 # Editor configurations
 .idea/
 .vscode/
+
+# Generated feed and runtime artifacts
+/src/feed/tmp
+/tmp
+/bin/scannerctl

@@ -1,0 +1,594 @@
+#!/usr/bin/env python3
+import hashlib
+import json
+import os
+import platform
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+import zipfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parent.parent
+BIN_DIR = ROOT / "bin"
+TMP_DIR = ROOT / "tmp"
+ZAP_REPO = TMP_DIR / "zaproxy-website"
+ZAP_ALERTS = ZAP_REPO / "site" / "content" / "docs" / "alerts"
+FEED_DIR = TMP_DIR / "feed"
+SCANNERCTL = BIN_DIR / "scannerctl"
+ALERT_INDEX_SCHEMA = ROOT / "doc" / "specs" / "alert-index.json"
+
+ZAP_REPO_URL = os.environ.get(
+    "ZAP_REPO_URL", "https://github.com/zaproxy/zaproxy-website.git"
+)
+OPENVAS_RELEASE_API = os.environ.get(
+    "OPENVAS_RELEASE_API",
+    "https://api.github.com/repos/greenbone/openvas-scanner/releases/latest",
+)
+USER_AGENT = "greenbone-was-generate-feed"
+
+
+def log(message):
+    print(f"==> {message}", flush=True)
+
+
+def fail(message):
+    print(f"error: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+def require_command(name):
+    if shutil.which(name) is None:
+        fail(f"required command not found: {name}")
+
+
+def run(command, **kwargs):
+    subprocess.run([str(part) for part in command], check=True, **kwargs)
+
+
+def clone_zap_repository():
+    TMP_DIR.mkdir(parents=True, exist_ok=True)
+
+    if (ZAP_REPO / ".git").is_dir():
+        log(f"updating ZAP repository in {ZAP_REPO}")
+        run(["git", "-C", ZAP_REPO, "pull", "--ff-only"])
+    else:
+        log(f"cloning ZAP repository into {ZAP_REPO}")
+        run(["git", "clone", "--depth=1", ZAP_REPO_URL, ZAP_REPO])
+
+    if not ZAP_ALERTS.is_dir():
+        fail(f"ZAP alerts directory not found: {ZAP_ALERTS}")
+
+
+def host_os():
+    system = platform.system()
+    if system == "Linux":
+        return "linux"
+    if system == "Darwin":
+        return "darwin"
+    fail(f"unsupported OS for scannerctl download: {system}")
+
+
+def host_arch_pattern():
+    machine = platform.machine().lower()
+    if machine in ("x86_64", "amd64"):
+        return re.compile(r"x86_64|amd64")
+    if machine in ("aarch64", "arm64"):
+        return re.compile(r"aarch64|arm64")
+    fail(f"unsupported architecture for scannerctl download: {machine}")
+
+
+def fetch_bytes(url):
+    request = urllib.request.Request(url, headers=request_headers(url))
+    with urllib.request.urlopen(request) as response:
+        return response.read()
+
+
+def download_to(url, path):
+    request = urllib.request.Request(url, headers=request_headers(url))
+    with urllib.request.urlopen(request) as response, path.open("wb") as handle:
+        shutil.copyfileobj(response, handle)
+
+
+def request_headers(url):
+    headers = {"User-Agent": USER_AGENT}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token and urllib.parse.urlparse(url).hostname == "api.github.com":
+        headers["Authorization"] = f"Bearer {token}"
+        headers["X-GitHub-Api-Version"] = "2022-11-28"
+    return headers
+
+
+def select_scannerctl_asset(release):
+    os_token = host_os()
+    arch_pattern = host_arch_pattern()
+    assets = release.get("assets") or []
+    if not isinstance(assets, list):
+        fail("openvas-scanner release response does not contain an assets list")
+
+    asset_by_name = {
+        asset.get("name", ""): asset.get("browser_download_url", "")
+        for asset in assets
+        if isinstance(asset, dict)
+    }
+    matches = []
+    ignored_suffixes = (
+        ".asc",
+        ".sig",
+        ".sha256",
+        ".sha512",
+        ".sha256sum",
+        ".sha512sum",
+    )
+
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name = str(asset.get("name") or "")
+        url = str(asset.get("browser_download_url") or "")
+        lowered = name.lower()
+        if "scannerctl" not in lowered:
+            continue
+        if lowered.endswith(ignored_suffixes):
+            continue
+        if os_token not in lowered:
+            continue
+        if arch_pattern.search(lowered) is None:
+            continue
+
+        digest = str(asset.get("digest") or "").strip()
+        digest_match = re.fullmatch(r"sha256:([a-fA-F0-9]{64})", digest)
+        if digest_match is not None:
+            matches.append((name, url, "asset-digest", digest_match.group(1).lower()))
+            continue
+
+        checksum = next(
+            (
+                (checksum_name, asset_by_name[checksum_name])
+                for checksum_name in (
+                    f"{name}.sha256",
+                    f"{name}.sha256sum",
+                    f"{name}.sha256.txt",
+                    f"{name}.sha256sum.txt",
+                )
+                if checksum_name in asset_by_name
+            ),
+            None,
+        )
+        if checksum is not None:
+            matches.append((name, url, checksum[0], str(checksum[1])))
+
+    if not matches:
+        print(
+            "error: no scannerctl release asset with a SHA-256 digest or checksum "
+            "matched this host. Available assets:",
+            file=sys.stderr,
+        )
+        for asset in assets:
+            if isinstance(asset, dict):
+                print(f"  - {asset.get('name', '<unnamed>')}", file=sys.stderr)
+        raise SystemExit(1)
+
+    return sorted(matches)[0]
+
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def verify_asset_digest(asset_path, expected):
+    actual = sha256_file(asset_path)
+    if actual != expected.lower():
+        fail(f"scannerctl checksum mismatch: expected {expected.lower()}, got {actual}")
+
+
+def verify_asset_checksum(asset_path, checksum_url, checksum_name):
+    checksum_text = fetch_bytes(checksum_url).decode("utf-8", errors="replace")
+    match = re.search(r"\b([a-fA-F0-9]{64})\b", checksum_text)
+    if match is None:
+        fail(f"no SHA-256 digest found in {checksum_name}")
+    verify_asset_digest(asset_path, match.group(1).lower())
+
+
+def ensure_safe_archive_path(base, member_name):
+    target = (base / member_name).resolve()
+    if not str(target).startswith(f"{base.resolve()}{os.sep}"):
+        fail(f"unsafe archive path in scannerctl release asset: {member_name}")
+
+
+def extract_asset(asset_path, asset_name, unpack_dir):
+    if asset_name.endswith((".tar.gz", ".tgz")):
+        with tarfile.open(asset_path) as archive:
+            for member in archive.getmembers():
+                ensure_safe_archive_path(unpack_dir, member.name)
+            archive.extractall(unpack_dir)
+        return
+
+    if asset_name.endswith(".zip"):
+        with zipfile.ZipFile(asset_path) as archive:
+            for member in archive.namelist():
+                ensure_safe_archive_path(unpack_dir, member)
+            archive.extractall(unpack_dir)
+        return
+
+    shutil.copy2(asset_path, unpack_dir / "scannerctl")
+
+
+def find_scannerctl(unpack_dir):
+    ignored_suffixes = (
+        ".asc",
+        ".sig",
+        ".sha256",
+        ".sha512",
+        ".sha256sum",
+        ".sha512sum",
+    )
+    files = sorted(path for path in unpack_dir.rglob("*") if path.is_file())
+    exact = next((path for path in files if path.name == "scannerctl"), None)
+    if exact is not None:
+        return exact
+    return next(
+        (
+            path
+            for path in files
+            if "scannerctl" in path.name and not path.name.endswith(ignored_suffixes)
+        ),
+        None,
+    )
+
+
+def install_scannerctl_from_asset(asset_path, asset_name, unpack_dir):
+    unpack_dir.mkdir(parents=True, exist_ok=True)
+    extract_asset(asset_path, asset_name, unpack_dir)
+
+    scannerctl_path = find_scannerctl(unpack_dir)
+    if scannerctl_path is None:
+        fail(f"scannerctl binary not found in release asset {asset_name}")
+
+    shutil.copy2(scannerctl_path, SCANNERCTL)
+    mode = SCANNERCTL.stat().st_mode
+    SCANNERCTL.chmod(mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+
+def download_scannerctl():
+    if SCANNERCTL.is_file() and os.access(SCANNERCTL, os.X_OK):
+        log(f"using existing scannerctl at {SCANNERCTL}")
+        return
+
+    with tempfile.TemporaryDirectory() as temp_dir_name:
+        temp_dir = Path(temp_dir_name)
+        asset_path = temp_dir / "scannerctl-release-asset"
+        unpack_dir = temp_dir / "unpack"
+
+        log("resolving latest openvas-scanner release")
+        release = json.loads(fetch_bytes(OPENVAS_RELEASE_API))
+        asset_name, asset_url, checksum_name, checksum_value = select_scannerctl_asset(
+            release
+        )
+
+        log(f"downloading {asset_name} to {SCANNERCTL}")
+        download_to(asset_url, asset_path)
+        if checksum_name == "asset-digest":
+            verify_asset_digest(asset_path, checksum_value)
+        else:
+            verify_asset_checksum(asset_path, checksum_value, checksum_name)
+        install_scannerctl_from_asset(asset_path, asset_name, unpack_dir)
+
+
+def generate_feed():
+    log(f"generating feed into {FEED_DIR}")
+    if FEED_DIR.exists():
+        shutil.rmtree(FEED_DIR)
+    FEED_DIR.mkdir(parents=True, exist_ok=True)
+
+    run(
+        [
+            "cargo",
+            "run",
+            "--manifest-path",
+            ROOT / "Cargo.toml",
+            "--bin",
+            "greenbone-was-vtgen",
+            "--",
+            "--input",
+            ZAP_ALERTS,
+            "--output",
+            FEED_DIR,
+        ]
+    )
+
+    plugin_set = time.strftime("%Y%m%d%H%M%S", time.gmtime())
+    (FEED_DIR / "plugin_feed_info.inc").write_text(
+        "\n".join(
+            [
+                f'PLUGIN_SET = "{plugin_set}";',
+                'PLUGIN_FEED = "Greenbone WAS generated ZAP feed";',
+                'FEED_VENDOR = "Greenbone AG";',
+                'FEED_HOME = "https://www.greenbone.net";',
+                'FEED_NAME = "greenbone-was-zap";',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+
+def nasl_files():
+    return sorted(FEED_DIR.rglob("*.nasl"))
+
+
+def check_nasl_files():
+    files = nasl_files()
+    if not files:
+        fail(f"no NASL files generated in {FEED_DIR}")
+
+    log(f"checking {len(files)} NASL files with scannerctl")
+    failed = False
+    for nasl_file in files:
+        result = subprocess.run(
+            [str(SCANNERCTL), "syntax", "--quiet", str(nasl_file)], check=False
+        )
+        if result.returncode != 0:
+            print(f"invalid NASL: {nasl_file}", file=sys.stderr)
+            failed = True
+
+    if failed:
+        fail("one or more NASL files are invalid")
+
+
+def check_feed_metadata():
+    expected_count = len(nasl_files())
+    log("checking feed metadata with scannerctl description-mode transform")
+    result = subprocess.run(
+        [str(SCANNERCTL), "feed", "transform", "--path", str(FEED_DIR)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        print(result.stderr, file=sys.stderr, end="")
+        fail(f"feed metadata transform failed for {FEED_DIR}")
+
+    vts = json.loads(result.stdout)
+    errors = []
+    if len(vts) != expected_count:
+        errors.append(f"expected {expected_count} transformed VTs, got {len(vts)}")
+
+    seen_oids = set()
+    for vt in vts:
+        filename = vt.get("filename") or "<missing filename>"
+        oid = vt.get("oid")
+        if not oid:
+            errors.append(f"{filename}: missing oid")
+        elif oid in seen_oids:
+            errors.append(f"{filename}: duplicate oid {oid}")
+        else:
+            seen_oids.add(oid)
+
+        if not vt.get("name"):
+            errors.append(f"{filename}: missing name")
+        if vt.get("category") != "gather_info":
+            errors.append(f"{filename}: unexpected category {vt.get('category')!r}")
+        if vt.get("family") != "Web application scanner":
+            errors.append(f"{filename}: unexpected family {vt.get('family')!r}")
+
+        tags = vt.get("tag") or {}
+        for tag in ("creation_date", "last_modification", "qod_type", "summary"):
+            if tag not in tags:
+                errors.append(f"{filename}: missing tag {tag}")
+
+    if errors:
+        for error in errors[:50]:
+            print(f"metadata error: {error}", file=sys.stderr)
+        if len(errors) > 50:
+            print(f"metadata error: ... {len(errors) - 50} more", file=sys.stderr)
+        fail(f"feed metadata validation failed for {FEED_DIR}")
+
+
+def check_alert_index():
+    index_path = FEED_DIR / "alert-index.json"
+    if not index_path.is_file():
+        fail(f"alert index not generated: {index_path}")
+
+    log("checking alert index JSON")
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        schema = json.loads(ALERT_INDEX_SCHEMA.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as error:
+        fail(f"invalid alert index JSON: {error}")
+
+    errors = validate_json_schema(index, schema, schema)
+    alerts = index.get("alerts")
+    if not isinstance(alerts, list) or not alerts:
+        errors.append("alerts must be a non-empty list")
+    else:
+        for alert in alerts:
+            if not isinstance(alert, dict):
+                errors.append("alert entry must be an object")
+                continue
+            for field in ("id", "oid", "name", "cwe", "cve", "wasc", "references", "source", "raw_frontmatter"):
+                if field not in alert:
+                    errors.append(f"{alert.get('id', '<unknown>')}: missing {field}")
+            if contains_empty_string(alert):
+                errors.append(f"{alert.get('id', '<unknown>')}: contains empty JSON string")
+
+    if errors:
+        for error in errors[:50]:
+            print(f"alert-index error: {error}", file=sys.stderr)
+        if len(errors) > 50:
+            print(f"alert-index error: ... {len(errors) - 50} more", file=sys.stderr)
+        fail(f"alert index validation failed for {index_path}")
+
+
+def validate_json_schema(instance, schema, root, path="$"):
+    if "$ref" in schema:
+        return validate_json_schema(instance, resolve_json_schema_ref(root, schema["$ref"]), root, path)
+
+    errors = []
+
+    if "oneOf" in schema:
+        matches = 0
+        for option in schema["oneOf"]:
+            if not validate_json_schema(instance, option, root, path):
+                matches += 1
+        if matches != 1:
+            errors.append(f"{path}: expected exactly one matching oneOf schema, got {matches}")
+        return errors
+
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"{path}: expected constant {schema['const']!r}")
+
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{path}: expected one of {schema['enum']!r}")
+
+    expected_type = schema.get("type")
+    if expected_type and not json_type_matches(instance, expected_type):
+        errors.append(f"{path}: expected {expected_type}, got {json_type_name(instance)}")
+        return errors
+
+    if isinstance(instance, str):
+        min_length = schema.get("minLength")
+        if min_length is not None and len(instance) < min_length:
+            errors.append(f"{path}: string shorter than minLength {min_length}")
+        pattern = schema.get("pattern")
+        if pattern and re.search(pattern, instance) is None:
+            errors.append(f"{path}: string does not match pattern {pattern!r}")
+        if schema.get("format") == "uri" and not is_uri(instance):
+            errors.append(f"{path}: string is not a valid URI")
+
+    if isinstance(instance, list):
+        min_items = schema.get("minItems")
+        if min_items is not None and len(instance) < min_items:
+            errors.append(f"{path}: array shorter than minItems {min_items}")
+        item_schema = schema.get("items")
+        if item_schema:
+            for index, item in enumerate(instance):
+                errors.extend(validate_json_schema(item, item_schema, root, f"{path}[{index}]"))
+        if schema.get("uniqueItems"):
+            seen = set()
+            for index, item in enumerate(instance):
+                key = json.dumps(item, sort_keys=True, separators=(",", ":"))
+                if key in seen:
+                    errors.append(f"{path}[{index}]: duplicate array item")
+                seen.add(key)
+
+    if isinstance(instance, dict):
+        for field in schema.get("required", []):
+            if field not in instance:
+                errors.append(f"{path}: missing required property {field}")
+
+        properties = schema.get("properties", {})
+        for field, value in instance.items():
+            field_path = f"{path}.{field}"
+            if field in properties:
+                errors.extend(validate_json_schema(value, properties[field], root, field_path))
+            elif schema.get("additionalProperties") is False:
+                errors.append(f"{field_path}: additional property is not allowed")
+            elif isinstance(schema.get("additionalProperties"), dict):
+                errors.extend(
+                    validate_json_schema(
+                        value,
+                        schema["additionalProperties"],
+                        root,
+                        field_path,
+                    )
+                )
+
+    return errors
+
+
+def resolve_json_schema_ref(root, ref):
+    if not ref.startswith("#/"):
+        fail(f"unsupported JSON Schema reference: {ref}")
+    value = root
+    for part in ref[2:].split("/"):
+        value = value[part]
+    return value
+
+
+def json_type_matches(value, expected):
+    if expected == "null":
+        return value is None
+    if expected == "boolean":
+        return isinstance(value, bool)
+    if expected == "number":
+        return (isinstance(value, int) or isinstance(value, float)) and not isinstance(value, bool)
+    if expected == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected == "string":
+        return isinstance(value, str)
+    if expected == "array":
+        return isinstance(value, list)
+    if expected == "object":
+        return isinstance(value, dict)
+    fail(f"unsupported JSON Schema type: {expected}")
+
+
+def json_type_name(value):
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "boolean"
+    if isinstance(value, int) and not isinstance(value, bool):
+        return "integer"
+    if isinstance(value, float):
+        return "number"
+    if isinstance(value, str):
+        return "string"
+    if isinstance(value, list):
+        return "array"
+    if isinstance(value, dict):
+        return "object"
+    return type(value).__name__
+
+
+def is_uri(value):
+    parsed = urllib.parse.urlparse(value)
+    return bool(parsed.scheme and (parsed.netloc or parsed.scheme == "urn"))
+
+
+def contains_empty_string(value):
+    if value == "":
+        return True
+    if isinstance(value, list):
+        return any(contains_empty_string(item) for item in value)
+    if isinstance(value, dict):
+        return any(contains_empty_string(item) for item in value.values())
+    return False
+
+
+def main():
+    require_command("git")
+    require_command("cargo")
+
+    clone_zap_repository()
+    download_scannerctl()
+    generate_feed()
+    check_nasl_files()
+    check_feed_metadata()
+    check_alert_index()
+
+    log("feed generated and validated successfully")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        fail(
+            "command failed with exit code "
+            f"{error.returncode}: {' '.join(str(part) for part in error.cmd)}"
+        )
