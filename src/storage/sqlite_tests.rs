@@ -161,6 +161,37 @@ async fn update_scan_context_progress_and_cursor_roundtrip() {
 }
 
 #[tokio::test]
+async fn update_stop_requested_succeeds_for_running_scan() {
+    let s = make_storage().await;
+    s.create_scan(make_scan_with_status("stop-run", ScanStatus::Running))
+        .await
+        .unwrap();
+
+    s.update_scan_stop_requested("stop-run", true)
+        .await
+        .unwrap();
+
+    let scan = s.get_scan("stop-run").await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Running);
+    assert!(scan.stop_requested);
+}
+
+#[tokio::test]
+async fn update_stop_requested_rejects_non_running_scan() {
+    let s = make_storage().await;
+    s.create_scan(make_scan_with_status("stop-stored", ScanStatus::Stored))
+        .await
+        .unwrap();
+
+    let err = s
+        .update_scan_stop_requested("stop-stored", true)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, StorageError::InvalidState));
+}
+
+#[tokio::test]
 async fn batch_results_persist_atomically() {
     let s = make_storage().await;
     s.create_scan(make_scan("batch")).await.unwrap();

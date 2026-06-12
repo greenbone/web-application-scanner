@@ -12,6 +12,7 @@ use crate::{api::dto::scans::ResultType, scan::ScanStatus};
 #[test]
 fn scan_request_serializes_and_deserializes_with_serde_json() {
     let payload = ScanRequest {
+        scan_id: None,
         target: Target {
             hosts: vec!["https://example.com".to_string()],
             excluded_hosts: vec!["https://example.com/logout".to_string()],
@@ -64,6 +65,7 @@ fn scan_request_round_trips_with_empty_collections() {
     assert_eq!(
         decoded,
         ScanRequest {
+            scan_id: None,
             target: Target {
                 hosts: vec!["https://example.com".to_string()],
                 excluded_hosts: vec![],
@@ -106,6 +108,29 @@ fn scan_action_request_round_trips_with_lowercase_action() {
 }
 
 #[test]
+fn scan_request_with_scan_id_deserializes_correctly() {
+    let json = r#"{
+        "scan_id": "custom-id-123",
+        "target": {
+            "hosts": ["https://example.com"],
+            "excluded_hosts": [],
+            "credentials": []
+        },
+        "scan_preferences": [],
+        "vts": []
+    }"#;
+
+    let decoded = serde_json::from_str::<ScanRequest>(json)
+        .expect("scan request with scan_id should deserialize");
+
+    assert_eq!(decoded.scan_id, Some("custom-id-123".to_string()));
+    assert_eq!(
+        decoded.target.hosts,
+        vec!["https://example.com".to_string()]
+    );
+}
+
+#[test]
 fn scan_response_payloads_deserialize_with_serde_json() {
     let detail = serde_json::from_str::<ScanDetailResponse>(
         r#"{
@@ -145,4 +170,65 @@ fn scan_response_payloads_deserialize_with_serde_json() {
     assert_eq!(result.ip_address.as_deref(), Some("192.0.2.10"));
     assert_eq!(result.message.as_deref(), Some("XSS detected"));
     assert_eq!(result.detail, Some(serde_json::json!({"risk": "high"})));
+}
+
+#[test]
+fn scan_status_response_omits_host_info_when_none() {
+    use crate::api::dto::scans::ScanStatusResponse;
+    let response = ScanStatusResponse {
+        status: ScanStatus::Stored,
+        start_time: None,
+        end_time: None,
+        host_info: None,
+    };
+    let json = serde_json::to_value(&response).expect("should serialize");
+    assert!(!json.as_object().unwrap().contains_key("host_info"));
+}
+
+#[test]
+fn scan_status_response_includes_host_info_when_present() {
+    use crate::api::dto::scans::{HostInfo, HostScanningEntry, ScanStatusResponse};
+    let response = ScanStatusResponse {
+        status: ScanStatus::Running,
+        start_time: Some(1000),
+        end_time: None,
+        host_info: Some(HostInfo {
+            all: 2,
+            excluded: 0,
+            dead: 0,
+            alive: 2,
+            queued: 1,
+            finished: 0,
+            scanning: vec![HostScanningEntry {
+                host: "http://a.example".to_string(),
+                progress: 1,
+            }],
+        }),
+    };
+    let json = serde_json::to_value(&response).expect("should serialize");
+    assert_eq!(json["host_info"]["all"], 2);
+    assert_eq!(json["host_info"]["alive"], 2);
+    assert_eq!(json["host_info"]["queued"], 1);
+    assert_eq!(json["host_info"]["scanning"][0]["host"], "http://a.example");
+    assert_eq!(json["host_info"]["scanning"][0]["progress"], 1);
+}
+
+#[test]
+fn host_info_round_trips_with_serde_json() {
+    use crate::api::dto::scans::{HostInfo, HostScanningEntry};
+    let info = HostInfo {
+        all: 3,
+        excluded: 0,
+        dead: 0,
+        alive: 3,
+        queued: 1,
+        finished: 1,
+        scanning: vec![HostScanningEntry {
+            host: "http://b.example".to_string(),
+            progress: 62,
+        }],
+    };
+    let json = serde_json::to_string(&info).expect("host info should serialize");
+    let decoded = serde_json::from_str::<HostInfo>(&json).expect("host info should deserialize");
+    assert_eq!(decoded, info);
 }

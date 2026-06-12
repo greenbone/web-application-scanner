@@ -15,6 +15,7 @@ use crate::{
         Scan, ScanResult, ScanRuntimeHandle, ScanServiceError, ScanStateCoordinator, ScanStatus,
         ScanStatusView,
         observability::{emit_scan_created, emit_scan_deleted},
+        validation::validate_target_urls,
     },
     storage::{StorageError, StorageHandle},
 };
@@ -25,6 +26,7 @@ pub type ScanServiceHandle = Arc<dyn ScanService>;
 /// Input payload for creating a scan.
 #[derive(Debug, Clone)]
 pub struct CreateScanRequest {
+    pub scan_id: Option<String>,
     pub target: Target,
     pub scan_preferences: Vec<ScannerPreference>,
     pub vts: Vec<Vt>,
@@ -33,6 +35,12 @@ pub struct CreateScanRequest {
 /// Internal scan orchestration commands used by transport handlers.
 #[async_trait]
 pub trait ScanService: Send + Sync {
+    /// Recover scans left in a non-terminal, non-stored state from a previous service run.
+    ///
+    /// Called once at startup before the service begins accepting requests. Implementations
+    /// should transition any `requested` or `running` scans to `failed`.
+    async fn recover_interrupted_scans(&self) -> Result<(), ScanServiceError>;
+
     async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError>;
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError>;
@@ -96,15 +104,28 @@ impl DefaultScanService {
 
 #[async_trait]
 impl ScanService for DefaultScanService {
+    async fn recover_interrupted_scans(&self) -> Result<(), ScanServiceError> {
+        self.scan_state
+            .recover_interrupted_scans()
+            .await
+            .map_err(ScanServiceError::Storage)
+    }
+
     async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError> {
         Ok(PreferencesResponse::default())
     }
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
-        let id = Uuid::new_v4().to_string();
+        let validated_hosts = validate_target_urls(&request.target.hosts)?;
+        let id = request
+            .scan_id
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
         let scan = Scan {
             id: id.clone(),
-            target: request.target,
+            target: Target {
+                hosts: validated_hosts,
+                ..request.target
+            },
             scan_preferences: request.scan_preferences,
             vts: request.vts,
             status: ScanStatus::Stored,
@@ -198,10 +219,25 @@ impl ScanService for DefaultScanService {
                     .map_err(Self::map_storage_err)?;
             }
             ScanStatus::Running => {
-                self.storage
-                    .update_scan_stop_requested(id, true)
-                    .await
-                    .map_err(Self::map_storage_err)?;
+                match self.scan_state.update_stop_requested(id, true).await {
+                    Ok(()) => {}
+                    Err(StorageError::InvalidState) => {
+                        let latest_scan = self
+                            .storage
+                            .get_scan(id)
+                            .await
+                            .map_err(Self::map_storage_err)?;
+                        return Err(ScanServiceError::InvalidTransition {
+                            from: latest_scan.status,
+                            requested: ScanStatus::Stopped,
+                        });
+                    }
+                    Err(error) => return Err(Self::map_storage_err(error)),
+                }
+
+                if let Some(runtime) = &self.runtime {
+                    runtime.request_stop(id.to_string()).await;
+                }
             }
             _ => {
                 return Err(ScanServiceError::InvalidTransition {

@@ -167,6 +167,8 @@ Introduce a scan-domain data model boundary for service contracts.
 
 ## Phase 4: Stop Flow and Stop-Request Flag
 
+Status: Done (2026-06-11)
+
 Implement strict stop semantics for requested and running scans.
 
 - `requested` + stop:
@@ -180,7 +182,17 @@ Implement strict stop semantics for requested and running scans.
   - if exceeded, force stop and transition to `failed`
 - If ZAP stop actions fail non-transiently, transition to `failed`.
 
+Phase 4 amendments (2026-06-11):
+
+- Routed `running` scan stop-request persistence through the scan state coordinator execution-state path (`stop_requested=true`) and kept runtime handle responsibilities focused on grace-period enforcement.
+- Added configurable stop grace period setting `GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS` with default `300` seconds.
+- Added worker-side graceful stop actions for in-flight spider/active scan operations by calling ZAP stop endpoints before finalizing `running` -> `stopped`.
+- Added forced-failure handling when stop grace period expires while scan remains `running` with `stop_requested=true`.
+- Added failure handling for non-success ZAP stop actions, transitioning scans to `failed`.
+
 ## Phase 5: URL Validation and Retry Backoff
+
+Status: Done (2026-06-11)
 
 Implement spec-compliant target validation and resilient external calls.
 
@@ -188,6 +200,7 @@ Implement spec-compliant target validation and resilient external calls.
   - absolute HTTP/HTTPS only
   - trim surrounding whitespace
   - reject user-info
+  - reject query strings
   - reject fragments
   - reject whitespace/control characters in URL
   - reject dot patterns as defined by spec
@@ -199,23 +212,54 @@ Implement spec-compliant target validation and resilient external calls.
 - Use retry for transient storage lock/contention and transient ZAP/network failures.
 - Exhausted retries transition active scan to `failed`.
 
+Phase 5 amendments (2026-06-11):
+
+- Added scan target URL validation in `src/scan/validation.rs` and integrated it into `create_scan` via `validate_target_urls`.
+- Updated validation rules/spec to reject target URLs containing query strings.
+- Added retry helper infrastructure in `src/scan/retry.rs` with transient error classification (`IsTransient`) and exponential backoff.
+- Added configurable retry settings in `src/config/settings.rs`:
+  - `GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES` (default `10`)
+  - `GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS` (default `60`)
+- Wired retry configuration from settings into runtime startup in `src/lib.rs`.
+- Implemented retry wrappers for infrastructure-facing components:
+  - `RetryingZapClient` for transient ZAP/network failures
+  - `RetryingScanStateCoordinator` for transient storage/backend failures
+- Removed worker-level retry closure boilerplate in favor of wrapper-based retrying calls.
+
 ## Phase 6: Progress Model and Alerts Polling
 
-Implement persisted progress and percentage calculations.
+Status: Done (2026-06-11)
+
+Implement persisted progress stage tracking and per-host calculations, then expose progress via the HTTP `host_info` model.
 
 - Track per target:
   - spider stage state: pending/running/done
   - spider last state from ZAP: running/stopped
   - active scan stage state: pending/running/done
   - active scan percentage 0..100
-- Compute per-target overall percentage:
-  - `25` if spider is done plus `0.75 * active_scan_percent`
-  - floor to integer
-- Aggregate target progress to scan-level percentage.
+- Compute per-host progress percentage:
+  - `0` if spider is not started
+  - `1` if spider is started but not finished
+  - `floor(25 + 0.75 * active_scan_percent)` once spider is finished
+- Expose progress in HTTP status responses as `host_info` with:
+  - counters: `all`, `excluded`, `dead`, `alive`, `queued`, `finished`
+  - `scanning`: list of `{ host, progress }` objects for currently scanned hosts
 - Poll alerts at configurable interval (default 10 seconds).
 - Use pagination start offset from persisted processed-alert count to avoid duplicates.
 
+Phase 6 amendments (2026-06-11):
+
+- Added `Deserialize` to all progress types (`StageState`, `TargetProgress`, `ScanProgress`) so stored JSON progress can be deserialized at read time.
+- Fixed `ScanProgress::refresh()` to return `1` for spider-running state instead of `0` (was returning `0` for both pending and running).
+- Added `HostInfo` and `HostScanningEntry` to `src/api/dto/scans.rs`; added optional `host_info` field to `ScanStatusResponse` (skipped when `None`).
+- Extended `ScanStatusView` in `src/scan/model.rs` with `progress: Option<ScanProgress>`; `Scan::status_view()` now deserializes the stored progress JSON.
+- Updated `GET /scans/{id}/status` handler to map `ScanProgress` to `HostInfo` via `progress_to_host_info()` in `src/api/scans.rs`.
+- `queued` = targets with pending spider; `finished` = targets with active scan done; `scanning` = targets in between; `excluded`/`dead`/`alive` are `0` (host reachability not yet tracked).
+- Alert polling interval was already implemented in Phase 3 (`alert_poll_interval` in worker loop); pagination via persisted `alert_cursor` was already in place.
+
 ## Phase 7: Startup Recovery and Wiring
+
+Status: Done (2026-06-11)
 
 Wire scan runtime into service startup.
 
@@ -226,14 +270,30 @@ Wire scan runtime into service startup.
 - Extend `AppState` to include scan service handle and resolved scan-runtime configuration values used by handlers/workers.
 - Keep API module as transport boundary only (HTTP parsing + response mapping).
 
+Phase 7 amendments (2026-06-11):
+
+- Added `run_startup_recovery` in `src/lib.rs` that calls `list_non_terminal_scans()` and transitions each `requested` or `running` scan directly to `failed` with a `warn!` log; `stored` scans are left untouched.
+- Recovery runs after the scan runtime and service are initialized but before `axum::serve` begins accepting connections.
+- `AppState` and `ScanService` wiring was already complete from prior phases; no structural changes were required there.
+
 ## Phase 8: Observability and Telemetry
+
+Status: Done (2026-06-11)
 
 Complete observability work that depends on retry behavior.
 
 - Log transient ZAP/storage failures as warnings when retries remain.
 - Log retry exhaustion as error before transitioning to `failed`.
 
+Phase 8 amendments (2026-06-11):
+
+- Extended `with_retry` in `src/scan/retry.rs` to emit `warn!` on transient failures when retries remain and `error!` when transient retries are exhausted.
+- Added operation labels to all retry wrapper call sites in `src/zapclient/mod.rs` and `src/scan/state_coordinator/mod.rs` so retry logs identify the failing operation.
+- Added retry observability tests in `src/scan/retry_tests.rs` asserting warning logs for transient retries and error logs for retry exhaustion.
+
 ## Phase 9: Tests
+
+Status: Done (2026-06-11)
 
 Follow repository sidecar test pattern.
 
@@ -257,6 +317,21 @@ Follow repository sidecar test pattern.
 - Add service tests for read commands (`get_scan`, `get_scan_status`, `get_result`) including not-found behavior.
 - Add API tests confirming scan endpoints use the service facade and keep storage access out of handler logic.
 - Add service/API tests asserting scan creation and deletion emit informational logs.
+
+Phase 9 amendments (2026-06-11):
+
+- Introduced new sidecar test files for coordinator internals (`transition_executor`, `execution_state_executor`, and coordinator delegation), which were not explicitly listed in original file-level planning.
+- Added explicit API transport-boundary tests proving scan handlers use `ScanService` and avoid direct storage access.
+- Added an explicit startup-recovery service test for `recover_interrupted_scans` (`requested`/`running` -> `failed`, `stored` unchanged).
+- Remaining Phase 9 checklist items were already covered by existing tests and required no additional implementation changes.
+
+## Phase 10: Configuration Additions Follow-Up
+
+Status: Done (2026-06-11)
+
+Track remaining work from the "Configuration Additions" section after clarifying that config-module settings can be consumed directly by startup/runtime wiring and do not require an `AppState`-specific runtime-config view.
+
+- Add missing config tests for defaults and environment overrides for retry settings (`scan_retry_max_retries`, `scan_retry_max_delay_seconds`) in `src/config/settings_tests.rs`.
 
 ## Configuration Additions
 
@@ -285,6 +360,13 @@ Before opening the implementation PR:
 - Confirm there is a single canonical scan-domain lifecycle status enum in scan module and no duplicate lifecycle enum in API DTOs.
 - Confirm status transition telemetry is emitted via the transition executor after successful storage mutation.
 - Confirm result persistence, alert cursor updates, and progress updates flow through the execution-state executor via the scan state coordinator.
+- Confirm progress exposed by `GET /scans/{id}/status` uses `host_info` with fields `all`, `excluded`, `dead`, `alive`, `queued`, `finished`, and `scanning`.
+- Confirm `host_info.scanning` is a list of `{ host, progress }` objects (not strings and not key/value pseudo-maps).
+- Confirm per-host progress rules in runtime output:
+  - `0` when spider is not started
+  - `1` when spider is started but not finished
+  - `floor(25 + 0.75 * active_scan_percent)` after spider finished
+- Confirm no overall/scan-level percentage field is returned in HTTP status responses.
 - Manual API checks:
   - create -> `stored`
   - start (`stored`) -> `requested`

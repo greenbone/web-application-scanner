@@ -27,6 +27,14 @@ struct AjaxSpiderStatusResponse {
     status: String,
 }
 
+/// Response payload returned by the ZAP `ajaxSpider/stop` endpoint.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+struct AjaxSpiderStopResponse {
+    /// The stop request status returned by ZAP.
+    #[serde(rename = "Result")]
+    status: String,
+}
+
 impl ZapClient {
     /// Start an AJAX Spider scan for the specified context, target URL and options.
     pub async fn start_ajax_spider_scan(
@@ -95,6 +103,34 @@ impl ZapClient {
                 content: parsed_response.status,
             }),
         }
+    }
+
+    /// Stop the currently running AJAX Spider scan.
+    pub async fn stop_ajax_spider_scan(&self) -> Result<(), ZapClientError> {
+        let endpoint = self.endpoint_url("JSON/ajaxSpider/action/stop");
+        let response = self
+            .http_client
+            .post(endpoint)
+            .form(&[("apikey", self.api_key.as_str())])
+            .send()
+            .await?;
+
+        let status = response.status();
+        let body = response.text().await?;
+
+        if !status.is_success() {
+            return Err(ZapClientError::UnexpectedStatus { status, body });
+        }
+
+        let parsed_response = serde_json::from_str::<AjaxSpiderStopResponse>(&body)?;
+        if parsed_response.status != "OK" {
+            return Err(ZapClientError::UnexpectedContent {
+                field: "Result".to_string(),
+                content: parsed_response.status,
+            });
+        }
+
+        Ok(())
     }
 }
 

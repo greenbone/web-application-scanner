@@ -52,11 +52,20 @@ pub async fn run() -> Result<(), AppError> {
             alert_poll_interval: std::time::Duration::from_secs(
                 settings.scan_alert_poll_interval_seconds,
             ),
+            stop_grace_period: std::time::Duration::from_secs(
+                settings.scan_stop_grace_period_seconds,
+            ),
+            retry_max_retries: settings.scan_retry_max_retries,
+            retry_max_delay: std::time::Duration::from_secs(settings.scan_retry_max_delay_seconds),
             ..ScanRuntimeConfig::default()
         },
     );
     let scan_service: ScanServiceHandle =
         Arc::new(DefaultScanService::new(storage.clone(), runtime));
+    scan_service
+        .recover_interrupted_scans()
+        .await
+        .map_err(|e| AppError::Storage(e.to_string()))?;
 
     let state = AppState::new(storage, scan_service);
     let router = http::router::build_router(state);

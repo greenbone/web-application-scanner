@@ -11,6 +11,9 @@ use crate::scan::ScanStatus;
 /// Request body for POST /scans — Create a new scan.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanRequest {
+    /// Optional scan ID. If not provided, a random UUID will be generated.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scan_id: Option<String>,
     /// Target hosts to scan.
     pub target: Target,
     /// Optional scanner preferences.
@@ -114,13 +117,6 @@ pub enum ResultType {
     HostDetail,
 }
 
-/// Response body for POST /scans – returns the created scan ID.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ScanIdResponse {
-    /// The UUID of the newly created scan.
-    pub id: String,
-}
-
 /// Response body for GET /scans/preferences – available scanner preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 pub struct PreferencesResponse {}
@@ -149,6 +145,37 @@ pub struct ScanStatusResponse {
     /// Unix timestamp when the scan ended (None if still running or not started).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub end_time: Option<i64>,
+    /// Per-host progress information (present when the scan has progress data).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host_info: Option<HostInfo>,
+}
+
+/// Host-level progress summary exposed in the scan status response.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostInfo {
+    /// Total number of hosts in the scan target scope.
+    pub all: i32,
+    /// Number of excluded hosts.
+    pub excluded: i32,
+    /// Number of unreachable hosts.
+    pub dead: i32,
+    /// Number of hosts that are reachable and can be scanned.
+    pub alive: i32,
+    /// Number of hosts not yet being processed.
+    pub queued: i32,
+    /// Number of hosts for which scanning is complete.
+    pub finished: i32,
+    /// Hosts where scans are currently running with their per-host progress.
+    pub scanning: Vec<HostScanningEntry>,
+}
+
+/// A single host currently being scanned, with its progress percentage.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostScanningEntry {
+    /// Host identifier string.
+    pub host: String,
+    /// Current per-host progress percentage (0–100).
+    pub progress: i32,
 }
 
 /// Response body for GET /scans/{id}/results/{rid} – a single scan result.

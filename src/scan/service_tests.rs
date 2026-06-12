@@ -14,6 +14,7 @@ use crate::{
 
 fn make_request() -> CreateScanRequest {
     CreateScanRequest {
+        scan_id: None,
         target: Target {
             hosts: vec!["https://example.test".to_string()],
             excluded_hosts: vec![],
@@ -257,4 +258,82 @@ async fn get_scan_status_returns_status_and_timestamps() {
     assert_eq!(status_view.status, ScanStatus::Running);
     assert_eq!(status_view.start_time, Some(100));
     assert_eq!(status_view.end_time, Some(120));
+}
+
+#[tokio::test]
+async fn recover_interrupted_scans_transitions_non_terminal_runtime_states_to_failed() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    storage
+        .create_scan(make_scan("scan-stored-recovery", ScanStatus::Stored))
+        .await
+        .unwrap();
+    storage
+        .create_scan(make_scan("scan-requested-recovery", ScanStatus::Requested))
+        .await
+        .unwrap();
+    storage
+        .create_scan(make_scan("scan-running-recovery", ScanStatus::Running))
+        .await
+        .unwrap();
+    let service = DefaultScanService::new_storage_only(storage.clone());
+
+    service.recover_interrupted_scans().await.unwrap();
+
+    let stored = storage.get_scan("scan-stored-recovery").await.unwrap();
+    let requested = storage.get_scan("scan-requested-recovery").await.unwrap();
+    let running = storage.get_scan("scan-running-recovery").await.unwrap();
+
+    assert_eq!(stored.status, ScanStatus::Stored);
+    assert_eq!(requested.status, ScanStatus::Failed);
+    assert_eq!(running.status, ScanStatus::Failed);
+}
+
+#[traced_test]
+#[tokio::test]
+async fn create_scan_with_provided_scan_id_uses_the_id() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let service = DefaultScanService::new_storage_only(storage.clone());
+    let mut request = make_request();
+    request.scan_id = Some("custom-scan-id".to_string());
+
+    let scan_id = service.create_scan(request).await.unwrap();
+
+    assert_eq!(scan_id, "custom-scan-id");
+    let persisted = storage.get_scan("custom-scan-id").await.unwrap();
+    assert_eq!(persisted.id, "custom-scan-id");
+    assert_eq!(persisted.status, ScanStatus::Stored);
+    assert!(logs_contain("scan created"));
+}
+
+#[tokio::test]
+async fn create_scan_without_scan_id_generates_uuid() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let service = DefaultScanService::new_storage_only(storage.clone());
+
+    let scan_id = service.create_scan(make_request()).await.unwrap();
+
+    // UUID should be in the standard format (36 characters with hyphens)
+    assert_eq!(scan_id.len(), 36);
+    assert!(scan_id.contains('-'));
+    let persisted = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(persisted.status, ScanStatus::Stored);
+}
+
+#[tokio::test]
+async fn create_scan_with_duplicate_id_returns_already_exists_error() {
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    storage
+        .create_scan(make_scan("existing-id", ScanStatus::Stored))
+        .await
+        .unwrap();
+    let service = DefaultScanService::new_storage_only(storage);
+    let mut request = make_request();
+    request.scan_id = Some("existing-id".to_string());
+
+    let err = service.create_scan(request).await.unwrap_err();
+
+    assert!(matches!(
+        err,
+        ScanServiceError::Storage(StorageError::AlreadyExists(id)) if id == "existing-id"
+    ));
 }
