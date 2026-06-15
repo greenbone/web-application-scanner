@@ -25,7 +25,7 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
         .and(body_string_contains("count=25"))
         .respond_with(
             ResponseTemplate::new(200).set_body_string(
-                "{\"alerts\":[{\"pluginId\":\"40012\",\"name\":\"Cross Site Scripting\",\"risk\":\"High\",\"description\":\"Reflected XSS detected\",\"url\":\"https://example.com/vuln\"}]}",
+                "{\"alerts\":[{\"alertRef\":\"40012\",\"name\":\"Cross Site Scripting\",\"risk\":\"High\",\"description\":\"Reflected XSS detected\",\"url\":\"https://example.com/vuln\"}]}",
             ),
         )
         .expect(1)
@@ -48,7 +48,7 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
     assert_eq!(alerts.len(), 1);
 
     let first = &alerts[0];
-    assert_eq!(first.plugin_id, "40012");
+    assert_eq!(first.alert_ref, "40012");
     assert_eq!(first.name, "Cross Site Scripting");
     assert_eq!(first.risk, AlertRiskLevel::High);
     assert_eq!(first.description, "Reflected XSS detected");
@@ -63,7 +63,7 @@ async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
         .and(path("/JSON/alert/view/alerts"))
         .respond_with(
             ResponseTemplate::new(200).set_body_string(
-                "{\"alerts\":[{\"pluginId\":\"50001\",\"name\":\"Custom Risk\",\"risk\":\"Critical\",\"description\":\"Unknown risk value from API\",\"url\":\"https://example.com/custom\"}]}",
+                "{\"alerts\":[{\"alertRef\":\"50001\",\"name\":\"Custom Risk\",\"risk\":\"Critical\",\"description\":\"Unknown risk value from API\",\"url\":\"https://example.com/custom\"}]}",
             ),
         )
         .expect(1)

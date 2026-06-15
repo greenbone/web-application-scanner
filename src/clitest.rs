@@ -120,7 +120,7 @@ async fn main() {
     for alert in alerts {
         println!(
             "Alert [{:?}]: {} - {} ({}:{})",
-            alert.risk, alert.name, alert.description, alert.url, alert.plugin_id
+            alert.risk, alert.name, alert.description, alert.url, alert.alert_ref
         );
     }
 

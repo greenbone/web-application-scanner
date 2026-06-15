@@ -89,7 +89,7 @@ async fn mock_zap_server() -> MockServer {
         .and(path("/JSON/alert/view/alerts"))
         .and(body_string_contains("start=0"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
-            r#"{"alerts":[{"pluginId":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
+            r#"{"alerts":[{"alertRef":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
             "application/json",
         ))
         .mount(&server)
@@ -232,7 +232,7 @@ async fn mock_zap_server_with_remove_context_error() -> MockServer {
         .and(path("/JSON/alert/view/alerts"))
         .and(body_string_contains("start=0"))
         .respond_with(ResponseTemplate::new(200).set_body_raw(
-            r#"{"alerts":[{"pluginId":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
+            r#"{"alerts":[{"alertRef":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
             "application/json",
         ))
         .mount(&server)
@@ -539,7 +539,7 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
     assert_eq!(results.len(), 1);
     assert!(matches!(results[0].result_type, ResultType::Alarm));
     assert_eq!(results[0].ip_address.as_deref(), Some("https://example.test"));
-    assert_eq!(results[0].oid.as_deref(), Some("10001"));
+    assert_eq!(results[0].oid.as_deref(), Some("ZAP-10001"));
     assert_eq!(results[0].hostname.as_deref(), Some("example.test"));
     assert_eq!(results[0].port, Some(443));
     assert_eq!(results[0].protocol.as_deref(), Some("tcp"));
