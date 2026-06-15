@@ -636,7 +636,10 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
     let results = storage.get_results(&scan_id, 0, None).await.unwrap();
     assert_eq!(results.len(), 1);
     assert!(matches!(results[0].result_type, ResultType::Alarm));
-    assert_eq!(results[0].ip_address.as_deref(), Some("https://example.test"));
+    assert_eq!(
+        results[0].ip_address.as_deref(),
+        Some("https://example.test")
+    );
     assert_eq!(results[0].oid.as_deref(), Some("ZAP-10001"));
     assert_eq!(results[0].hostname.as_deref(), Some("example.test"));
     assert_eq!(results[0].port, Some(443));
@@ -751,7 +754,7 @@ async fn runtime_with_multiple_workers_processes_multiple_scans() {
 
 #[tokio::test]
 async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_clears_stop_requested()
-{
+ {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let server = mock_zap_server_for_running_stop_in_active_scan().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
@@ -788,7 +791,7 @@ async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_cl
 
 #[tokio::test]
 async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_clears_stop_requested()
-{
+ {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
     let server = mock_zap_server_for_running_stop_in_spider().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();

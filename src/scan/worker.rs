@@ -316,7 +316,7 @@ impl ScanWorker {
             &context_name,
             scan.target.hosts.last().map(String::as_str),
         )
-            .await?;
+        .await?;
 
         if self.stop_requested(&scan.id).await? {
             self.complete_stop_request(&scan.id, Some(&context_name))
