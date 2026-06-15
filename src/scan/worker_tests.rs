@@ -258,7 +258,7 @@ async fn mock_zap_server_with_remove_context_error() -> MockServer {
     server
 }
 
-async fn mock_zap_server_for_running_stop() -> MockServer {
+async fn mock_zap_server_for_running_stop_in_active_scan() -> MockServer {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -337,7 +337,7 @@ async fn mock_zap_server_for_running_stop() -> MockServer {
     server
 }
 
-async fn mock_zap_server_for_running_stop_with_stop_failure() -> MockServer {
+async fn mock_zap_server_for_running_stop_in_spider() -> MockServer {
     let server = MockServer::start().await;
 
     Mock::given(method("POST"))
@@ -374,6 +374,85 @@ async fn mock_zap_server_for_running_stop_with_stop_failure() -> MockServer {
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    server
+}
+
+async fn mock_zap_server_for_running_stop_in_active_stage_with_stop_failure() -> MockServer {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"10"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/stop"))
         .respond_with(
             ResponseTemplate::new(500).set_body_raw(r#"{"code":"internal"}"#, "application/json"),
         )
@@ -494,6 +573,25 @@ async fn wait_for_status(storage: &dyn ScanStorage, scan_id: &str, expected: Sca
     }
 
     panic!("scan did not reach expected status");
+}
+
+async fn wait_for_request_path(server: &MockServer, expected_path: &str) {
+    for _ in 0..200 {
+        let seen = server
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .iter()
+            .any(|request| request.url.path() == expected_path);
+
+        if seen {
+            return;
+        }
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("mock server did not receive expected request path: {expected_path}");
 }
 
 #[traced_test]
@@ -652,9 +750,10 @@ async fn runtime_with_multiple_workers_processes_multiple_scans() {
 }
 
 #[tokio::test]
-async fn runtime_stop_running_scan_transitions_to_stopped_and_clears_stop_requested() {
+async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_clears_stop_requested()
+{
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
-    let server = mock_zap_server_for_running_stop().await;
+    let server = mock_zap_server_for_running_stop_in_active_scan().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
         storage.clone(),
@@ -677,6 +776,44 @@ async fn runtime_stop_running_scan_transitions_to_stopped_and_clears_stop_reques
 
     service.start_scan(&scan_id).await.unwrap();
     wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_request_path(&server, "/JSON/ascan/action/scan").await;
+
+    service.stop_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Stopped).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Stopped);
+    assert!(!scan.stop_requested);
+}
+
+#[tokio::test]
+async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_clears_stop_requested()
+{
+    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let server = mock_zap_server_for_running_stop_in_spider().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_request_path(&server, "/JSON/ajaxSpider/view/status").await;
 
     service.stop_scan(&scan_id).await.unwrap();
     wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Stopped).await;
@@ -689,7 +826,7 @@ async fn runtime_stop_running_scan_transitions_to_stopped_and_clears_stop_reques
 #[tokio::test]
 async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
     let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
-    let server = mock_zap_server_for_running_stop_with_stop_failure().await;
+    let server = mock_zap_server_for_running_stop_in_active_stage_with_stop_failure().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
         storage.clone(),
@@ -712,6 +849,7 @@ async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
 
     service.start_scan(&scan_id).await.unwrap();
     wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_request_path(&server, "/JSON/ascan/action/scan").await;
 
     service.stop_scan(&scan_id).await.unwrap();
     wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Failed).await;
@@ -746,6 +884,9 @@ async fn runtime_forces_failed_when_stop_grace_period_expires() {
 
     service.start_scan(&scan_id).await.unwrap();
     wait_for_running(storage.as_ref(), &scan_id).await;
+    // Wait until active scan status polling is in-flight before requesting stop,
+    // so grace-period failure handling is exercised deterministically.
+    wait_for_request_path(&server, "/JSON/ascan/view/status").await;
 
     service.stop_scan(&scan_id).await.unwrap();
     wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Failed).await;
