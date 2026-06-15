@@ -18,9 +18,9 @@ pub enum AlertRiskLevel {
 /// A single alert returned by the ZAP `alert/view/alerts` endpoint.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Alert {
-    /// The plugin ID of the alert.
-    #[serde(rename = "pluginId")]
-    pub plugin_id: String,
+    /// The alert reference of the alert.
+    #[serde(rename = "alertRef")]
+    pub alert_ref: String,
 
     /// The name of the alert, e.g. "Cross Site Scripting".
     pub name: String,

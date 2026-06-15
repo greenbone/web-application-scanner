@@ -505,7 +505,7 @@ fn alert_to_result(scan_id: &str, alert: &Alert, target_url: Option<&str>) -> Sc
         },
         ip_address: target_url.map(str::to_string),
         hostname,
-        oid: Some(alert.plugin_id.clone()),
+        oid: Some(format!("ZAP-{}", alert.alert_ref)),
         port,
         protocol,
         message: Some(message),
