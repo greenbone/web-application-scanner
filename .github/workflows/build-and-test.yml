@@ -1,0 +1,207 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Build
+        run: make build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Run tests
+        run: make test
+
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Run Rust linter
+        run: make lint
+
+  format-check:
+    name: Format Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Check code formatting
+        run: make check-format
+
+  compile-check:
+    name: Compile Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Check code compilation
+        run: make check-compile
+
+  docs:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: -D warnings
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Build documentation
+        run: make docs
+
+  openapi:
+    name: openapi validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npx --yes @redocly/cli@1.25.15 lint --config .redocly.yaml doc/openapi-reference.yml
+
+  smoke:
+    name: Smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust toolchain
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Run smoke tests
+        run: make build
+      - name: Start service and check readiness
+        env:
+          GREENBONE_WAS_PORT: "8030"
+          GREENBONE_WAS_STORAGE_BACKEND: sqlite
+          GREENBONE_WAS_LOG_LEVEL: info
+          GREENBONE_WAS_VAR_DATA_DIR: /tmp/greenbone-was
+        run: |
+          set -euo pipefail
+
+          ./target/debug/greenbone-was > smoke.log 2>&1 &
+          service_pid=$!
+
+          cleanup() {
+            if kill -0 "${service_pid}" 2>/dev/null; then
+              kill "${service_pid}" 2>/dev/null || true
+              wait "${service_pid}" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for _ in $(seq 1 30); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:8030/api/v1/health/ready >/dev/null; then
+              exit 0
+            fi
+
+            if ! kill -0 "${service_pid}" 2>/dev/null; then
+              cat smoke.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          cat smoke.log
+          exit 1
+
+  feed:
+    name: Feed generation
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Generate and validate NASL feed
+        id: generate
+        run: |
+          set +e
+          ./bin/generate-feed
+          status=$?
+          echo "status=${status}" >> "${GITHUB_OUTPUT}"
+          exit 0
+      - name: Archive generated NASL feed
+        if: always()
+        run: |
+          test -d tmp/feed
+          rm -f tmp/generated-nasl-feed.tar.gz
+          tar -czf tmp/generated-nasl-feed.tar.gz -C tmp/feed .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: generated-nasl-feed
+          path: tmp/generated-nasl-feed.tar.gz
+          if-no-files-found: error
+      - name: Fail if feed generation failed
+        if: always() && steps.generate.outputs.status != '0'
+        run: exit "${{ steps.generate.outputs.status }}"
+
+  coverage:
+    name: coverage report
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Rust
+        uses: greenbone/actions/setup-rust@v3
+        with:
+          rust-version: stable
+      - name: Install llvm-tools-preview
+        run: rustup component add llvm-tools-preview
+      - name: Install cargo-llvm-cov
+        run: cargo install --locked --version 0.6.16 cargo-llvm-cov
+      - name: Generate coverage report
+        run: make coverage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            target/coverage/html
+            target/coverage/lcov.info
+          if-no-files-found: error
