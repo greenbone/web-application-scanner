@@ -69,6 +69,8 @@ pub struct Settings {
     pub var_data_dir: String,
     /// SQLite connection URL, either explicit or derived from `var_data_dir`.
     pub sqlite_url: Option<String>,
+    /// Whether `sqlite_url` came from the explicit `GREENBONE_WAS_SQLITE_URL` override.
+    pub sqlite_url_is_explicit: bool,
     /// Base URL for the ZAP HTTP API.
     pub zap_base_url: String,
     /// API key used for authenticated ZAP API calls.
@@ -189,14 +191,14 @@ impl Settings {
             }
         };
 
-        let sqlite_url = match raw.sqlite_url {
+        let (sqlite_url, sqlite_url_is_explicit) = match raw.sqlite_url {
             Some(url) if url.is_empty() => {
                 return Err(ConfigError::Message(
                     "GREENBONE_WAS_SQLITE_URL must not be empty".to_string(),
                 ));
             }
-            Some(url) => Some(url),
-            None => Some(default_sqlite_url(&raw.var_data_dir)),
+            Some(url) => (Some(url), true),
+            None => (Some(default_sqlite_url(&raw.var_data_dir)), false),
         };
 
         Ok(Self {
@@ -206,6 +208,7 @@ impl Settings {
             storage_backend,
             var_data_dir: raw.var_data_dir,
             sqlite_url,
+            sqlite_url_is_explicit,
             zap_base_url: raw.zap_base_url,
             zap_api_key: raw.zap_api_key,
             scan_worker_count: raw.scan_worker_count,

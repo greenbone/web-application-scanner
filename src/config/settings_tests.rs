@@ -41,6 +41,7 @@ fn test_uses_defaults_when_env_is_unset() {
         settings.sqlite_url.as_deref(),
         Some(settings::default_sqlite_url(settings::DEFAULT_VAR_DATA_DIR).as_str())
     );
+    assert!(!settings.sqlite_url_is_explicit);
     assert_eq!(settings.zap_base_url, settings::DEFAULT_ZAP_BASE_URL);
     assert_eq!(settings.zap_api_key, settings::DEFAULT_ZAP_API_KEY);
     assert_eq!(
@@ -92,6 +93,7 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
     assert_eq!(settings.var_data_dir, "/tmp/greenbone-was");
     assert_eq!(settings.sqlite_url, Some("sqlite:scans.db".to_string()));
+    assert!(settings.sqlite_url_is_explicit);
     assert_eq!(settings.zap_base_url, "http://127.0.0.1:8081");
     assert_eq!(settings.zap_api_key, "non-default-api-key");
     assert_eq!(settings.scan_worker_count, 3);
@@ -134,6 +136,7 @@ fn test_sqlite_backend_with_url() {
     let settings = Settings::load().expect("Failed to load settings");
     assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
     assert_eq!(settings.sqlite_url.as_deref(), Some("sqlite:/tmp/test.db"));
+    assert!(settings.sqlite_url_is_explicit);
 }
 
 #[test]
@@ -150,6 +153,7 @@ fn test_var_data_dir_changes_derived_sqlite_url() {
         settings.sqlite_url.as_deref(),
         Some("sqlite:/tmp/greenbone-was-data/scans.db")
     );
+    assert!(!settings.sqlite_url_is_explicit);
 }
 
 #[test]
@@ -167,6 +171,26 @@ fn test_explicit_sqlite_url_overrides_var_data_dir_default() {
         settings.sqlite_url.as_deref(),
         Some("sqlite:/custom/scans.db")
     );
+    assert!(settings.sqlite_url_is_explicit);
+}
+
+#[test]
+#[serial]
+fn test_explicit_sqlite_url_matching_default_stays_explicit() {
+    clear_env();
+    unsafe {
+        env::set_var(
+            "GREENBONE_WAS_SQLITE_URL",
+            settings::default_sqlite_url(settings::DEFAULT_VAR_DATA_DIR),
+        );
+    }
+
+    let settings = Settings::load().expect("Failed to load settings");
+    assert_eq!(
+        settings.sqlite_url.as_deref(),
+        Some(settings::default_sqlite_url(settings::DEFAULT_VAR_DATA_DIR).as_str())
+    );
+    assert!(settings.sqlite_url_is_explicit);
 }
 
 #[test]

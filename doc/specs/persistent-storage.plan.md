@@ -47,6 +47,8 @@ from it.
 
 ## Phase 2: Runtime Data Directory Preparation
 
+Status: Done (2026-06-16)
+
 Create the configured variable data directory before opening the default
 database there.
 
