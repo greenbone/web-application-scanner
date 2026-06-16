@@ -1,4 +1,4 @@
-.PHONY: test build clean build-release run install lint check-format format check-compile docs coverage
+.PHONY: test build clean build-release run install lint check-format format check-compile docs coverage lint-deps check-unused-deps
 
 INSTALL_PREFIX ?= /usr/local
 
@@ -35,3 +35,9 @@ docs:
 coverage:
 	cargo llvm-cov --locked --all-targets --html --output-dir target/coverage/html
 	cargo llvm-cov report --locked --lcov --output-path target/coverage/lcov.info
+
+lint-deps:
+	cargo deny --locked check
+
+check-unused-deps:
+	cargo machete
