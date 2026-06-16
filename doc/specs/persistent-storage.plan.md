@@ -25,6 +25,8 @@ module's own single-threaded unit tests.
 
 ## Phase 1: Variable Data Directory Setting
 
+Status: Done (2026-06-16)
+
 Add a configurable variable data directory and derive the default database URL
 from it.
 

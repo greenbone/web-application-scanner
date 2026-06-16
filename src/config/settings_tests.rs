@@ -14,6 +14,7 @@ fn clear_env() {
         env::remove_var("GREENBONE_WAS_LOG_LEVEL");
         env::remove_var("GREENBONE_WAS_PORT");
         env::remove_var("GREENBONE_WAS_STORAGE_BACKEND");
+        env::remove_var("GREENBONE_WAS_VAR_DATA_DIR");
         env::remove_var("GREENBONE_WAS_SQLITE_URL");
         env::remove_var("GREENBONE_WAS_ZAP_BASE_URL");
         env::remove_var("GREENBONE_WAS_ZAP_API_KEY");
@@ -35,9 +36,10 @@ fn test_uses_defaults_when_env_is_unset() {
     assert_eq!(settings.log_level, settings::DEFAULT_LOG_LEVEL);
     assert_eq!(settings.port, settings::DEFAULT_PORT);
     assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
+    assert_eq!(settings.var_data_dir, settings::DEFAULT_VAR_DATA_DIR);
     assert_eq!(
         settings.sqlite_url.as_deref(),
-        Some(settings::DEFAULT_SQLITE_URL)
+        Some(settings::default_sqlite_url(settings::DEFAULT_VAR_DATA_DIR).as_str())
     );
     assert_eq!(settings.zap_base_url, settings::DEFAULT_ZAP_BASE_URL);
     assert_eq!(settings.zap_api_key, settings::DEFAULT_ZAP_API_KEY);
@@ -72,6 +74,7 @@ fn test_uses_env_overrides_when_set() {
         env::set_var("GREENBONE_WAS_LOG_LEVEL", "debug");
         env::set_var("GREENBONE_WAS_PORT", "8080");
         env::set_var("GREENBONE_WAS_STORAGE_BACKEND", "sqlite");
+        env::set_var("GREENBONE_WAS_VAR_DATA_DIR", "/tmp/greenbone-was");
         env::set_var("GREENBONE_WAS_SQLITE_URL", "sqlite:scans.db");
         env::set_var("GREENBONE_WAS_ZAP_BASE_URL", "http://127.0.0.1:8081");
         env::set_var("GREENBONE_WAS_ZAP_API_KEY", "non-default-api-key");
@@ -87,6 +90,7 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.log_level, "debug");
     assert_eq!(settings.port, 8080);
     assert_eq!(settings.storage_backend, StorageBackend::Sqlite);
+    assert_eq!(settings.var_data_dir, "/tmp/greenbone-was");
     assert_eq!(settings.sqlite_url, Some("sqlite:scans.db".to_string()));
     assert_eq!(settings.zap_base_url, "http://127.0.0.1:8081");
     assert_eq!(settings.zap_api_key, "non-default-api-key");
@@ -134,7 +138,40 @@ fn test_sqlite_backend_with_url() {
 
 #[test]
 #[serial]
-fn test_sqlite_backend_with_empty_url_is_error() {
+fn test_var_data_dir_changes_derived_sqlite_url() {
+    clear_env();
+    unsafe {
+        env::set_var("GREENBONE_WAS_VAR_DATA_DIR", "/tmp/greenbone-was-data");
+    }
+
+    let settings = Settings::load().expect("Failed to load settings");
+    assert_eq!(settings.var_data_dir, "/tmp/greenbone-was-data");
+    assert_eq!(
+        settings.sqlite_url.as_deref(),
+        Some("sqlite:/tmp/greenbone-was-data/scans.db")
+    );
+}
+
+#[test]
+#[serial]
+fn test_explicit_sqlite_url_overrides_var_data_dir_default() {
+    clear_env();
+    unsafe {
+        env::set_var("GREENBONE_WAS_VAR_DATA_DIR", "/tmp/greenbone-was-data");
+        env::set_var("GREENBONE_WAS_SQLITE_URL", "sqlite:/custom/scans.db");
+    }
+
+    let settings = Settings::load().expect("Failed to load settings");
+    assert_eq!(settings.var_data_dir, "/tmp/greenbone-was-data");
+    assert_eq!(
+        settings.sqlite_url.as_deref(),
+        Some("sqlite:/custom/scans.db")
+    );
+}
+
+#[test]
+#[serial]
+fn test_sqlite_backend_with_empty_explicit_url_is_error() {
     clear_env();
     unsafe {
         env::set_var("GREENBONE_WAS_STORAGE_BACKEND", "sqlite");

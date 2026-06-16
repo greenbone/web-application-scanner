@@ -4,6 +4,7 @@
 
 use config::{Config, ConfigBuilder, ConfigError, Environment, builder::DefaultState};
 use serde::Deserialize;
+use std::path::Path;
 
 /// Default log format (text format).
 pub const DEFAULT_LOG_FORMAT: &str = "fmt";
@@ -18,10 +19,14 @@ pub const DEFAULT_PORT: u16 = 8030;
 pub const DEFAULT_STORAGE_BACKEND: &str = "sqlite";
 
 /// In-memory SQLite connection URL.
-pub const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
+#[cfg(test)]
+pub(crate) const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
 
-/// Default SQLite connection URL.
-pub const DEFAULT_SQLITE_URL: &str = SQLITE_IN_MEMORY_URL;
+/// Default variable data directory.
+pub const DEFAULT_VAR_DATA_DIR: &str = "/var/lib/greenbone-was";
+
+/// Default SQLite database filename.
+pub const DEFAULT_SQLITE_DATABASE_FILENAME: &str = "scans.db";
 
 /// Default ZAP API base URL.
 pub const DEFAULT_ZAP_BASE_URL: &str = "http://127.0.0.1:8547";
@@ -60,8 +65,9 @@ pub struct Settings {
     pub port: u16,
     /// Which storage backend to use at runtime.
     pub storage_backend: StorageBackend,
-    /// SQLite connection URL (e.g. `sqlite:scans.db`).
-    /// Required when `storage_backend` is [`StorageBackend::Sqlite`].
+    /// Directory for variable runtime data, including the default SQLite database.
+    pub var_data_dir: String,
+    /// SQLite connection URL, either explicit or derived from `var_data_dir`.
     pub sqlite_url: Option<String>,
     /// Base URL for the ZAP HTTP API.
     pub zap_base_url: String,
@@ -85,7 +91,8 @@ struct RawSettings {
     log_level: String,
     port: u16,
     storage_backend: String,
-    sqlite_url: String,
+    var_data_dir: String,
+    sqlite_url: Option<String>,
     zap_base_url: String,
     zap_api_key: String,
     scan_worker_count: usize,
@@ -118,7 +125,7 @@ impl Settings {
             .set_default("log_level", "info")?
             .set_default("port", 8030)?
             .set_default("storage_backend", DEFAULT_STORAGE_BACKEND)?
-            .set_default("sqlite_url", DEFAULT_SQLITE_URL)?
+            .set_default("var_data_dir", DEFAULT_VAR_DATA_DIR)?
             .set_default("zap_base_url", DEFAULT_ZAP_BASE_URL)?
             .set_default("zap_api_key", DEFAULT_ZAP_API_KEY)?
             .set_default("scan_worker_count", DEFAULT_SCAN_WORKER_COUNT as i64)?
@@ -182,23 +189,22 @@ impl Settings {
             }
         };
 
-        let sqlite_url = if raw.sqlite_url.is_empty() {
-            None
-        } else {
-            Some(raw.sqlite_url)
+        let sqlite_url = match raw.sqlite_url {
+            Some(url) if url.is_empty() => {
+                return Err(ConfigError::Message(
+                    "GREENBONE_WAS_SQLITE_URL must not be empty".to_string(),
+                ));
+            }
+            Some(url) => Some(url),
+            None => Some(default_sqlite_url(&raw.var_data_dir)),
         };
-
-        if storage_backend == StorageBackend::Sqlite && sqlite_url.is_none() {
-            return Err(ConfigError::Message(
-                "GREENBONE_WAS_SQLITE_URL is required when storage backend is 'sqlite'".to_string(),
-            ));
-        }
 
         Ok(Self {
             log_format: raw.log_format,
             log_level: raw.log_level,
             port: raw.port,
             storage_backend,
+            var_data_dir: raw.var_data_dir,
             sqlite_url,
             zap_base_url: raw.zap_base_url,
             zap_api_key: raw.zap_api_key,
@@ -209,6 +215,12 @@ impl Settings {
             scan_retry_max_delay_seconds: raw.scan_retry_max_delay_seconds,
         })
     }
+}
+
+/// Build the default SQLite connection URL below `var_data_dir`.
+pub fn default_sqlite_url(var_data_dir: &str) -> String {
+    let db_path = Path::new(var_data_dir).join(DEFAULT_SQLITE_DATABASE_FILENAME);
+    format!("sqlite:{}", db_path.display())
 }
 
 #[cfg(test)]
