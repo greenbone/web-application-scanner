@@ -10,6 +10,8 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    commit-message:
+      prefix: "Misc"
 
   - package-ecosystem: "cargo"
     directory: "/"
@@ -20,3 +22,12 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    commit-message:
+      prefix: "Deps"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "CI"
