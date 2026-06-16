@@ -1,0 +1,136 @@
+name: Release web-application-scanner
+
+on:
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+    inputs:
+      release-type:
+        type: choice
+        description: What kind of release do you want to do?
+        options:
+          - patch
+          - minor
+          - major
+      release-version:
+        type: string
+        description: Set an explicit version, that will overwrite release-type. Fails if version is not compliant.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-release:
+    name: Create a new release
+    # If the event is a workflow_dispatch or on of the labels 'pre release',
+    # 'patch release', 'minor release' or 'major release' is set and PR is
+    # closed because of a merge
+    # NOTE: priority of set labels will be alpha > release-candidate > patch > minor > major,
+    #       so if 'major' and 'patch' labels are set, it will create a patch release.
+    if: |
+      ( github.event_name == 'workflow_dispatch') || (
+        ( contains(github.event.pull_request.labels.*.name, 'alpha release') ||
+          contains(github.event.pull_request.labels.*.name, 'rc release') ||
+          contains(github.event.pull_request.labels.*.name, 'patch release') ||
+          contains(github.event.pull_request.labels.*.name, 'minor release') ||
+          contains(github.event.pull_request.labels.*.name, 'major release')) &&
+          github.event.pull_request.merged == true )
+    runs-on: "ubuntu-latest"
+    outputs:
+      git-release-tag: ${{ steps.release.outputs.git-release-tag }}
+      release-version: ${{ steps.release-version.outputs.release-version }}
+    steps:
+      - name: Selecting the Release type
+        id: release-type
+        uses: greenbone/actions/release-type@v3
+        with:
+          release-type-input: ${{ inputs.release-type }}
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # for conventional commits and getting all git tags
+          persist-credentials: false
+          ref: ${{ steps.release-type.outputs.release-ref }}
+      - name: Determine release version
+        id: release-version
+        uses: greenbone/actions/release-version@v3
+        with:
+          release-type: ${{ steps.release-type.outputs.release-type }}
+          release-version: ${{ inputs.release-version }}
+          versioning-scheme: "semver"
+      - name: Install git-cliff
+        uses: greenbone/actions/uv@v3
+        with:
+          install: git-cliff
+      - name: Determine changelog
+        env:
+          GITHUB_REPO: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          git-cliff -v --strip header -o /tmp/changelog.md --unreleased --tag ${{ steps.release-version.outputs.release-version }} ${{ steps.release-version.outputs.last-release-version }}..HEAD
+      - name: Release with release action
+        id: release
+        uses: greenbone/actions/release@v3
+        with:
+          github-user: ${{ secrets.GREENBONE_BOT }}
+          github-user-mail: ${{ secrets.GREENBONE_BOT_MAIL }}
+          github-user-token: ${{ secrets.GREENBONE_BOT_TOKEN }}
+          release-version: ${{ steps.release-version.outputs.release-version }}
+          changelog: /tmp/changelog.md
+          ref: ${{ steps.release-type.outputs.release-ref }}
+          versioning-scheme: "semver"
+          next-version: "false"
+          sign-release-files: "false"
+
+  build-binaries:
+    name: Build binary artifacts
+    runs-on: "ubuntu-latest"
+    container: rust:slim-bookworm
+    needs: build-and-release
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.build-and-release.outputs.git-release-tag }}
+      - name: Install build dependencies
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends \
+            curl \
+            make
+      - name: Build project
+        run: |
+          mkdir -p /tmp/install
+          DESTDIR=/tmp/install make install
+      - name: Create tarballs
+        run: |
+          tar -C /tmp/install -czvf web-application-scanner-${{ needs.build-and-release.outputs.release-version }}-binaries.tar.gz .
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a #v7.0.1
+        with:
+          name: web-application-scanner-${{ needs.build-and-release.outputs.release-version }}-binaries
+          path: web-application-scanner-${{ needs.build-and-release.outputs.release-version }}-binaries.tar.gz
+
+  upload-and-sign-release-files:
+    name: Upload and sign release files
+    runs-on: "ubuntu-latest"
+    needs:
+      - build-and-release
+      - build-binaries
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c #v8.0.1
+        with:
+          name: web-application-scanner-${{ needs.build-and-release.outputs.release-version }}-binaries
+      - name: Upload release artifacts to GitHub Release
+        run: |
+          gh release upload --repo ${{ github.repository }} ${{ needs.build-and-release.outputs.git-release-tag }} web-application-scanner-${{ needs.build-and-release.outputs.release-version }}-binaries.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GREENBONE_BOT_TOKEN }}
+      - name: Sign release files
+        uses: greenbone/actions/sign-release-files@v3
+        with:
+          gpg-key: ${{ secrets.GPG_KEY }}
+          gpg-fingerprint: ${{ secrets.GPG_FINGERPRINT }}
+          gpg-passphrase: ${{ secrets.GPG_PASSPHRASE }}
+          release-version: ${{ needs.build-and-release.outputs.release-version }}
+          github-token: ${{ secrets.GREENBONE_BOT_TOKEN }}
