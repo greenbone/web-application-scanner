@@ -2,13 +2,10 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::sync::Arc;
-
 use crate::{
     api::dto::scans::{ResultType, Target},
-    config::settings::SQLITE_IN_MEMORY_URL,
     scan::{ScanResult, ScanStateCoordinator, ScanStatus},
-    storage::{ScanRecord, ScanStorage, sqlite::SqliteStorage},
+    storage::{ScanRecord, test_support::temporary_sqlite_storage},
 };
 
 fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
@@ -36,7 +33,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
 
 #[tokio::test]
 async fn transition_status_delegates_to_transition_executor() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-delegate-transition", ScanStatus::Stored))
         .await
@@ -58,7 +55,7 @@ async fn transition_status_delegates_to_transition_executor() {
 
 #[tokio::test]
 async fn persist_alert_batch_delegates_to_execution_state_executor() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-delegate-exec", ScanStatus::Running))
         .await

@@ -138,6 +138,8 @@ Implementation differences from the original checklist:
 
 ## Phase 7: Migrate Non-Storage Tests
 
+Status: Done (2026-06-16)
+
 Replace imports of `SQLITE_IN_MEMORY_URL` and direct in-memory storage creation
 outside `src/storage/sqlite_tests.rs`.
 

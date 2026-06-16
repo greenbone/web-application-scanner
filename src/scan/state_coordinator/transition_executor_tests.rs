@@ -2,16 +2,13 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::sync::Arc;
-
 use tracing_test::traced_test;
 
 use super::TransitionExecutor;
 use crate::{
     api::dto::scans::Target,
-    config::settings::SQLITE_IN_MEMORY_URL,
     scan::ScanStatus,
-    storage::{ScanRecord, ScanStorage, StorageError, sqlite::SqliteStorage},
+    storage::{ScanRecord, StorageError, test_support::temporary_sqlite_storage},
 };
 
 fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
@@ -40,7 +37,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
 #[traced_test]
 #[tokio::test]
 async fn transition_status_compare_and_swap_success_emits_transition_telemetry() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-cas-ok", ScanStatus::Stored))
         .await
@@ -60,7 +57,7 @@ async fn transition_status_compare_and_swap_success_emits_transition_telemetry()
 #[traced_test]
 #[tokio::test]
 async fn transition_status_returns_invalid_state_and_does_not_emit_telemetry_on_failed_write() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-cas-invalid", ScanStatus::Stored))
         .await
@@ -79,7 +76,7 @@ async fn transition_status_returns_invalid_state_and_does_not_emit_telemetry_on_
 #[traced_test]
 #[tokio::test]
 async fn transition_status_returns_not_found_and_does_not_emit_telemetry_on_failed_write() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let executor = TransitionExecutor::new(storage);
 
     let err = executor
@@ -93,7 +90,7 @@ async fn transition_status_returns_not_found_and_does_not_emit_telemetry_on_fail
 
 #[tokio::test]
 async fn recover_interrupted_scans_marks_requested_and_running_as_failed() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-stored", ScanStatus::Stored))
         .await

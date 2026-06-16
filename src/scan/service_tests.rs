@@ -2,14 +2,12 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::sync::Arc;
 use tracing_test::traced_test;
 
 use crate::{
     api::dto::scans::{ResultType, Target},
-    config::settings::SQLITE_IN_MEMORY_URL,
     scan::{CreateScanRequest, DefaultScanService, ScanService, ScanServiceError, ScanStatus},
-    storage::{ResultRecord, ScanRecord, ScanStorage, StorageError, sqlite::SqliteStorage},
+    storage::{ResultRecord, ScanRecord, StorageError, test_support::temporary_sqlite_storage},
 };
 
 fn make_request() -> CreateScanRequest {
@@ -51,7 +49,7 @@ fn make_scan(id: &str, status: ScanStatus) -> ScanRecord {
 #[traced_test]
 #[tokio::test]
 async fn create_scan_persists_stored_status() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let service = DefaultScanService::new_storage_only(storage.clone());
 
     let scan_id = service.create_scan(make_request()).await.unwrap();
@@ -65,7 +63,7 @@ async fn create_scan_persists_stored_status() {
 #[traced_test]
 #[tokio::test]
 async fn start_scan_transitions_stored_to_requested() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("start-scan", ScanStatus::Stored))
         .await
@@ -81,7 +79,7 @@ async fn start_scan_transitions_stored_to_requested() {
 
 #[tokio::test]
 async fn start_scan_returns_invalid_transition_for_non_stored_scans() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("done-scan", ScanStatus::Succeeded))
         .await
@@ -101,7 +99,7 @@ async fn start_scan_returns_invalid_transition_for_non_stored_scans() {
 
 #[tokio::test]
 async fn stop_scan_transitions_requested_to_stopped() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("queued-scan", ScanStatus::Requested))
         .await
@@ -116,7 +114,7 @@ async fn stop_scan_transitions_requested_to_stopped() {
 
 #[tokio::test]
 async fn stop_scan_marks_running_scan_as_stop_requested() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("running-scan", ScanStatus::Running))
         .await
@@ -132,7 +130,7 @@ async fn stop_scan_marks_running_scan_as_stop_requested() {
 
 #[tokio::test]
 async fn delete_scan_rejects_non_deletable_states() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("queued-delete", ScanStatus::Requested))
         .await
@@ -153,7 +151,7 @@ async fn delete_scan_rejects_non_deletable_states() {
 #[traced_test]
 #[tokio::test]
 async fn delete_scan_emits_info_log() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("done-delete", ScanStatus::Succeeded))
         .await
@@ -167,7 +165,7 @@ async fn delete_scan_emits_info_log() {
 
 #[tokio::test]
 async fn get_scan_returns_full_scan_record() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-read", ScanStatus::Stored))
         .await
@@ -183,7 +181,7 @@ async fn get_scan_returns_full_scan_record() {
 
 #[tokio::test]
 async fn get_scan_maps_missing_scan_to_scan_not_found() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let service = DefaultScanService::new_storage_only(storage);
 
     let err = service.get_scan("missing-scan").await.unwrap_err();
@@ -193,7 +191,7 @@ async fn get_scan_maps_missing_scan_to_scan_not_found() {
 
 #[tokio::test]
 async fn get_scan_result_returns_persisted_result() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-result", ScanStatus::Stored))
         .await
@@ -226,7 +224,7 @@ async fn get_scan_result_returns_persisted_result() {
 
 #[tokio::test]
 async fn get_scan_result_for_missing_index_forwards_storage_error() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-result-miss", ScanStatus::Stored))
         .await
@@ -246,7 +244,7 @@ async fn get_scan_result_for_missing_index_forwards_storage_error() {
 
 #[tokio::test]
 async fn get_scan_status_returns_status_and_timestamps() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let mut scan = make_scan("scan-status", ScanStatus::Running);
     scan.start_time = Some(100);
     scan.end_time = Some(120);
@@ -262,7 +260,7 @@ async fn get_scan_status_returns_status_and_timestamps() {
 
 #[tokio::test]
 async fn recover_interrupted_scans_transitions_non_terminal_runtime_states_to_failed() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("scan-stored-recovery", ScanStatus::Stored))
         .await
@@ -291,7 +289,7 @@ async fn recover_interrupted_scans_transitions_non_terminal_runtime_states_to_fa
 #[traced_test]
 #[tokio::test]
 async fn create_scan_with_provided_scan_id_uses_the_id() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let service = DefaultScanService::new_storage_only(storage.clone());
     let mut request = make_request();
     request.scan_id = Some("custom-scan-id".to_string());
@@ -307,7 +305,7 @@ async fn create_scan_with_provided_scan_id_uses_the_id() {
 
 #[tokio::test]
 async fn create_scan_without_scan_id_generates_uuid() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let service = DefaultScanService::new_storage_only(storage.clone());
 
     let scan_id = service.create_scan(make_request()).await.unwrap();
@@ -321,7 +319,7 @@ async fn create_scan_without_scan_id_generates_uuid() {
 
 #[tokio::test]
 async fn create_scan_with_duplicate_id_returns_already_exists_error() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     storage
         .create_scan(make_scan("existing-id", ScanStatus::Stored))
         .await

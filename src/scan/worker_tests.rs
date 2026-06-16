@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tracing_test::traced_test;
 
 use wiremock::{
@@ -12,12 +12,11 @@ use wiremock::{
 
 use crate::{
     api::dto::scans::{ResultType, Target},
-    config::settings::SQLITE_IN_MEMORY_URL,
     scan::{
         CreateScanRequest, DefaultScanService, ScanRuntimeConfig, ScanService, ScanStatus,
         start_scan_runtime,
     },
-    storage::{ScanStorage, sqlite::SqliteStorage},
+    storage::{ScanStorage, test_support::temporary_sqlite_storage},
     zapclient::ZapClient,
 };
 
@@ -597,7 +596,7 @@ async fn wait_for_request_path(server: &MockServer, expected_path: &str) {
 #[traced_test]
 #[tokio::test]
 async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_results() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -650,7 +649,7 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
 
 #[tokio::test]
 async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_with_active_status_error().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -681,7 +680,7 @@ async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
 
 #[tokio::test]
 async fn runtime_keeps_succeeded_status_when_context_cleanup_fails() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_with_remove_context_error().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -715,7 +714,7 @@ async fn runtime_with_multiple_workers_processes_multiple_scans() {
     // --- Skip this test until scan worker concurrency is supported ---
 
     /*
-        let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+        let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
         let server = mock_zap_server().await;
         let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
         let runtime = start_scan_runtime(
@@ -755,7 +754,7 @@ async fn runtime_with_multiple_workers_processes_multiple_scans() {
 #[tokio::test]
 async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_clears_stop_requested()
  {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_for_running_stop_in_active_scan().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -792,7 +791,7 @@ async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_cl
 #[tokio::test]
 async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_clears_stop_requested()
  {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_for_running_stop_in_spider().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -828,7 +827,7 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
 
 #[tokio::test]
 async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_for_running_stop_in_active_stage_with_stop_failure().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
@@ -863,7 +862,7 @@ async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
 
 #[tokio::test]
 async fn runtime_forces_failed_when_stop_grace_period_expires() {
-    let storage = Arc::new(SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap());
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_for_forced_stop_timeout().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
