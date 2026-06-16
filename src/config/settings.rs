@@ -18,10 +18,6 @@ pub const DEFAULT_PORT: u16 = 8030;
 /// Default storage backend (SQLite).
 pub const DEFAULT_STORAGE_BACKEND: &str = "sqlite";
 
-/// In-memory SQLite connection URL.
-#[cfg(test)]
-pub(crate) const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
-
 /// Default variable data directory.
 pub const DEFAULT_VAR_DATA_DIR: &str = "/var/lib/greenbone-was";
 

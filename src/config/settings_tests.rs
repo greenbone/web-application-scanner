@@ -212,7 +212,7 @@ fn test_sqlite_backend_with_empty_explicit_url_is_error() {
 fn test_in_memory_sqlite_url_is_rejected() {
     clear_env();
     unsafe {
-        env::set_var("GREENBONE_WAS_SQLITE_URL", settings::SQLITE_IN_MEMORY_URL);
+        env::set_var("GREENBONE_WAS_SQLITE_URL", "sqlite::memory:");
     }
 
     let result = Settings::load();
