@@ -153,6 +153,8 @@ outside `src/storage/sqlite_tests.rs`.
 
 ## Phase 8: Documentation Cleanup
 
+Status: Done (2026-06-16)
+
 Update stale test-storage wording.
 
 - Update `doc/specs/scan-module.md` so scan-module tests refer to temporary

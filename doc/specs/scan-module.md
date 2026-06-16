@@ -296,7 +296,9 @@ For each processed alert page, batch result persistence must succeed before the 
 
 ## Testing
 
-The following must be covered by unit tests using a mock ZAP client and in-memory SQLite storage where needed:
+The following must be covered by unit tests using a mock ZAP client and temporary file-backed SQLite storage where persistence is needed:
+
+In-memory SQLite is reserved for the storage module's own unit tests. Those storage tests must run on a single-thread Tokio runtime so the in-memory database remains available for the duration of each test.
 
 - All valid state transitions.
 - All invalid state transition attempts (must return an error).
