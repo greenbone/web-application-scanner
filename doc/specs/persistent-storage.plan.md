@@ -115,6 +115,8 @@ exception explicit.
 
 ## Phase 6: Persistent Temporary Test Databases
 
+Status: Done (2026-06-16)
+
 Move every non-storage test away from in-memory SQLite.
 
 - Add `tempfile` as a dev-dependency in `Cargo.toml`.
@@ -125,6 +127,14 @@ Move every non-storage test away from in-memory SQLite.
   - opens `SqliteStorage::new`,
   - returns both the storage handle and the `TempDir` guard.
 - Do not add any in-memory helper to shared test support.
+
+Implementation differences from the original checklist:
+
+- `src/storage/test_support.rs` includes a sidecar test module declaration via
+  `#[path = "test_support_tests.rs"]` for consistency with the storage module's
+  existing sidecar test pattern.
+- `src/storage/test_support_tests.rs` covers that the helper opens a file-backed
+  temporary SQLite database through the public constructor.
 
 ## Phase 7: Migrate Non-Storage Tests
 

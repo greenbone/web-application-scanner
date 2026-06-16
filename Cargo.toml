@@ -38,5 +38,6 @@ regex = "1.12.3"
 
 [dev-dependencies]
 serial_test = "3.5.0"
+tempfile = "3.27.0"
 tracing-test = "0.2"
 wiremock = "0.6"

@@ -4,6 +4,8 @@
 
 pub mod interface;
 pub mod sqlite;
+#[cfg(test)]
+pub(crate) mod test_support;
 
 use std::sync::Arc;
 
