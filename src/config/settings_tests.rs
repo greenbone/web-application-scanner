@@ -209,6 +209,36 @@ fn test_sqlite_backend_with_empty_explicit_url_is_error() {
 
 #[test]
 #[serial]
+fn test_in_memory_sqlite_url_is_rejected() {
+    clear_env();
+    unsafe {
+        env::set_var("GREENBONE_WAS_SQLITE_URL", settings::SQLITE_IN_MEMORY_URL);
+    }
+
+    let result = Settings::load();
+
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("file-backed SQLite database"));
+}
+
+#[test]
+#[serial]
+fn test_sqlite_url_with_memory_mode_is_rejected() {
+    clear_env();
+    unsafe {
+        env::set_var("GREENBONE_WAS_SQLITE_URL", "sqlite:scans.db?mode=memory");
+    }
+
+    let result = Settings::load();
+
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(err.to_string().contains("file-backed SQLite database"));
+}
+
+#[test]
+#[serial]
 fn test_unknown_storage_backend_is_error() {
     clear_env();
     unsafe {

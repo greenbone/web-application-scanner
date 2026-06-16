@@ -197,6 +197,11 @@ impl Settings {
                     "GREENBONE_WAS_SQLITE_URL must not be empty".to_string(),
                 ));
             }
+            Some(url) if is_in_memory_sqlite_url(&url) => {
+                return Err(ConfigError::Message(
+                    "GREENBONE_WAS_SQLITE_URL must use a file-backed SQLite database; in-memory SQLite URLs are not supported for runtime configuration".to_string(),
+                ));
+            }
             Some(url) => (Some(url), true),
             None => (Some(default_sqlite_url(&raw.var_data_dir)), false),
         };
@@ -224,6 +229,15 @@ impl Settings {
 pub fn default_sqlite_url(var_data_dir: &str) -> String {
     let db_path = Path::new(var_data_dir).join(DEFAULT_SQLITE_DATABASE_FILENAME);
     format!("sqlite:{}", db_path.display())
+}
+
+fn is_in_memory_sqlite_url(url: &str) -> bool {
+    let lower_url = url.to_ascii_lowercase();
+
+    lower_url == "sqlite::memory:"
+        || lower_url
+            .split(['?', '&'])
+            .any(|part| part == "mode=memory")
 }
 
 #[cfg(test)]

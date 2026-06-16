@@ -65,6 +65,8 @@ database there.
 
 ## Phase 3: Reject In-Memory Runtime Configuration
 
+Status: Done (2026-06-16)
+
 Reject in-memory SQLite URLs through normal application configuration.
 
 - Add an in-memory SQLite URL detector in `src/config/settings.rs`.
