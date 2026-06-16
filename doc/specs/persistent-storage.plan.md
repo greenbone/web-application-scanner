@@ -99,6 +99,8 @@ not accidentally create runtime in-memory databases.
 
 ## Phase 5: Single-Threaded Storage Unit Tests
 
+Status: Done (2026-06-16)
+
 Keep in-memory SQLite only in `src/storage/sqlite_tests.rs`, and make that
 exception explicit.
 
