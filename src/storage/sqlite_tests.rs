@@ -4,10 +4,24 @@
 
 use super::*;
 use crate::api::dto::scans::ResultType;
-use crate::config::settings::SQLITE_IN_MEMORY_URL;
+
+const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
 
 async fn make_storage() -> SqliteStorage {
-    SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap()
+    SqliteStorage::new_with_in_memory_policy(SQLITE_IN_MEMORY_URL, true)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn public_constructor_rejects_in_memory_sqlite_url() {
+    let err = match SqliteStorage::new(SQLITE_IN_MEMORY_URL).await {
+        Ok(_) => panic!("public constructor should reject in-memory SQLite URLs"),
+        Err(err) => err,
+    };
+
+    assert!(matches!(err, StorageError::Backend(_)));
+    assert!(err.to_string().contains("file-backed database"));
 }
 
 fn make_scan(id: &str) -> ScanRecord {

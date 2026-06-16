@@ -82,6 +82,8 @@ Reject in-memory SQLite URLs through normal application configuration.
 
 ## Phase 4: Enforce Constructor Policy
 
+Status: Done (2026-06-16)
+
 Make the storage constructor itself enforce the same policy so direct callers do
 not accidentally create runtime in-memory databases.
 
