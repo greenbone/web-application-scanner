@@ -149,6 +149,7 @@ jobs:
           GREENBONE_WAS_PORT: "8030"
           GREENBONE_WAS_STORAGE_BACKEND: sqlite
           GREENBONE_WAS_LOG_LEVEL: info
+          GREENBONE_WAS_VAR_DATA_DIR: /tmp/greenbone-was
         run: |
           set -euo pipefail
 

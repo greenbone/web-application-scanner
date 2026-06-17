@@ -35,6 +35,17 @@ pub async fn run() -> Result<(), AppError> {
     let settings = Settings::load()?;
     logging::init_logging(&settings);
 
+    if !settings.sqlite_url_is_explicit {
+        tokio::fs::create_dir_all(&settings.var_data_dir)
+            .await
+            .map_err(|e| {
+                AppError::Storage(format!(
+                    "failed to create variable data directory '{}': {}",
+                    settings.var_data_dir, e
+                ))
+            })?;
+    }
+
     let url = settings.sqlite_url.as_deref().unwrap(); // validated in settings
     info!("Using SQLite storage backend: {}", url);
     let storage: Arc<dyn storage::ScanStorage> = Arc::new(

@@ -31,8 +31,24 @@ impl SqliteStorage {
     /// Open (or create) a SQLite database at `url` and ensure the schema exists.
     ///
     /// `url` follows the SQLite connection string format accepted by sqlx, for
-    /// example `sqlite:path/to/scans.db` or `sqlite::memory:`.
+    /// example `sqlite:path/to/scans.db` or `sqlite:/var/lib/greenbone-was/scans.db`.
+    ///
+    /// Runtime callers must use a file-backed SQLite database. In-memory SQLite
+    /// URLs are reserved for this module's storage unit tests.
     pub async fn new(url: &str) -> Result<Self, StorageError> {
+        Self::new_with_in_memory_policy(url, false).await
+    }
+
+    async fn new_with_in_memory_policy(
+        url: &str,
+        allow_in_memory: bool,
+    ) -> Result<Self, StorageError> {
+        if !allow_in_memory && is_in_memory_sqlite_url(url) {
+            return Err(StorageError::Backend(
+                "SQLite storage requires a file-backed database; in-memory SQLite URLs are only supported by storage unit tests".to_string(),
+            ));
+        }
+
         let options = SqliteConnectOptions::from_str(url)
             .map_err(|e| StorageError::Backend(e.to_string()))?
             .create_if_missing(true)
@@ -95,6 +111,15 @@ impl SqliteStorage {
 
         Ok(())
     }
+}
+
+fn is_in_memory_sqlite_url(url: &str) -> bool {
+    let lower_url = url.to_ascii_lowercase();
+
+    lower_url == "sqlite::memory:"
+        || lower_url
+            .split(['?', '&'])
+            .any(|part| part == "mode=memory")
 }
 
 // ─── Serialisation helpers ────────────────────────────────────────────────────

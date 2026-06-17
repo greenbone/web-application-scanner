@@ -4,10 +4,30 @@
 
 use super::*;
 use crate::api::dto::scans::ResultType;
-use crate::config::settings::SQLITE_IN_MEMORY_URL;
+
+const SQLITE_IN_MEMORY_URL: &str = "sqlite::memory:";
 
 async fn make_storage() -> SqliteStorage {
-    SqliteStorage::new(SQLITE_IN_MEMORY_URL).await.unwrap()
+    SqliteStorage::new_with_in_memory_policy(SQLITE_IN_MEMORY_URL, true)
+        .await
+        .unwrap()
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn public_constructor_rejects_in_memory_sqlite_url() {
+    let err = match SqliteStorage::new(SQLITE_IN_MEMORY_URL).await {
+        Ok(_) => panic!("public constructor should reject in-memory SQLite URLs"),
+        Err(err) => err,
+    };
+
+    assert!(matches!(err, StorageError::Backend(_)));
+    assert!(err.to_string().contains("file-backed database"));
+
+    let storage = make_storage().await;
+    assert!(matches!(
+        storage.get_scan("missing").await.unwrap_err(),
+        StorageError::NotFound(_)
+    ));
 }
 
 fn make_scan(id: &str) -> ScanRecord {
@@ -54,7 +74,7 @@ fn make_result(scan_id: &str) -> ResultRecord {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn create_and_get_scan() {
     let s = make_storage().await;
     s.create_scan(make_scan("s1")).await.unwrap();
@@ -64,7 +84,7 @@ async fn create_and_get_scan() {
     assert_eq!(scan.target.hosts, vec!["10.0.0.1"]);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn duplicate_scan_returns_already_exists() {
     let s = make_storage().await;
     s.create_scan(make_scan("dup")).await.unwrap();
@@ -72,7 +92,7 @@ async fn duplicate_scan_returns_already_exists() {
     assert!(matches!(err, StorageError::AlreadyExists(_)));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn get_missing_scan_returns_not_found() {
     let s = make_storage().await;
     assert!(matches!(
@@ -81,7 +101,7 @@ async fn get_missing_scan_returns_not_found() {
     ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn update_and_read_status() {
     let s = make_storage().await;
     s.create_scan(make_scan("st")).await.unwrap();
@@ -92,7 +112,7 @@ async fn update_and_read_status() {
     assert_eq!(scan.status, ScanStatus::Running);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn transition_scan_status_requires_expected_state() {
     let s = make_storage().await;
     s.create_scan(make_scan("cas")).await.unwrap();
@@ -109,7 +129,7 @@ async fn transition_scan_status_requires_expected_state() {
     assert!(matches!(err, StorageError::InvalidState));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn transition_scan_status_sets_lifecycle_timestamps() {
     let s = make_storage().await;
     s.create_scan(make_scan("ts")).await.unwrap();
@@ -130,7 +150,7 @@ async fn transition_scan_status_sets_lifecycle_timestamps() {
     assert!(scan.end_time.is_some());
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn update_scan_context_progress_and_cursor_roundtrip() {
     let s = make_storage().await;
     s.create_scan(make_scan("meta")).await.unwrap();
@@ -160,7 +180,7 @@ async fn update_scan_context_progress_and_cursor_roundtrip() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn update_stop_requested_succeeds_for_running_scan() {
     let s = make_storage().await;
     s.create_scan(make_scan_with_status("stop-run", ScanStatus::Running))
@@ -176,7 +196,7 @@ async fn update_stop_requested_succeeds_for_running_scan() {
     assert!(scan.stop_requested);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn update_stop_requested_rejects_non_running_scan() {
     let s = make_storage().await;
     s.create_scan(make_scan_with_status("stop-stored", ScanStatus::Stored))
@@ -191,7 +211,7 @@ async fn update_stop_requested_rejects_non_running_scan() {
     assert!(matches!(err, StorageError::InvalidState));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn batch_results_persist_atomically() {
     let s = make_storage().await;
     s.create_scan(make_scan("batch")).await.unwrap();
@@ -206,7 +226,7 @@ async fn batch_results_persist_atomically() {
     assert_eq!(results[1].id, 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn list_non_terminal_scans_excludes_terminal_states() {
     let s = make_storage().await;
     s.create_scan(make_scan_with_status("new", ScanStatus::Stored))
@@ -221,7 +241,7 @@ async fn list_non_terminal_scans_excludes_terminal_states() {
     assert_eq!(scans[0].id, "new");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn delete_removes_scan_and_results() {
     let s = make_storage().await;
     s.create_scan(make_scan("del")).await.unwrap();
@@ -233,7 +253,7 @@ async fn delete_removes_scan_and_results() {
     ));
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn results_auto_increment() {
     let s = make_storage().await;
     s.create_scan(make_scan("ri")).await.unwrap();
@@ -245,7 +265,7 @@ async fn results_auto_increment() {
     assert_eq!(results[1].id, 1);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn results_range_query() {
     let s = make_storage().await;
     s.create_scan(make_scan("rq")).await.unwrap();
