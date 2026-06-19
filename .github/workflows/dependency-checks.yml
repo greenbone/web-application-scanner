@@ -23,7 +23,7 @@ jobs:
     name: Lint dependencies with cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -36,7 +36,7 @@ jobs:
     name: Check for unused dependencies
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@v3
         with:

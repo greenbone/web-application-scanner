@@ -20,7 +20,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -32,7 +32,7 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -44,7 +44,7 @@ jobs:
     name: Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -56,7 +56,7 @@ jobs:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -68,7 +68,7 @@ jobs:
     name: Compile Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -82,7 +82,7 @@ jobs:
     env:
       RUSTDOCFLAGS: -D warnings
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -94,7 +94,7 @@ jobs:
     name: openapi validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -104,7 +104,7 @@ jobs:
     name: Smoke test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust toolchain
         uses: greenbone/actions/setup-rust@v3
         with:
@@ -152,7 +152,7 @@ jobs:
     name: coverage report
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Set up Rust
         uses: greenbone/actions/setup-rust@v3
         with:
