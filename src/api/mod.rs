@@ -7,3 +7,6 @@ pub const API_VERSION: &str = "v1";
 pub mod dto;
 pub mod health;
 pub mod scans;
+
+#[cfg(feature = "api-docs")]
+pub mod openapi;
