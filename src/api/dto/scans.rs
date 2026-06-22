@@ -11,6 +11,7 @@ use crate::scan::ScanStatus;
 
 /// Request body for POST /scans — Create a new scan.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScanRequest {
     /// Optional scan ID. If not provided, a random UUID will be generated.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -26,6 +27,7 @@ pub struct ScanRequest {
 
 /// Request body for POST /scans/{id} — Perform an action on a scan.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScanActionRequest {
     /// The action to perform (Start or Stop).
     pub action: ScanAction,
@@ -33,6 +35,7 @@ pub struct ScanActionRequest {
 
 /// Scan action type.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
 pub enum ScanAction {
     /// Start the scan.
@@ -43,6 +46,7 @@ pub enum ScanAction {
 
 /// Scan target specification.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct Target {
     /// Target hosts to scan.
     pub hosts: Vec<String>,
@@ -56,6 +60,7 @@ pub struct Target {
 
 /// Authentication credential for a service.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct Credential {
     /// Service type (must be "http" for web app scans).
     pub service: String,
@@ -67,6 +72,7 @@ pub struct Credential {
 
 /// Username and password credential pair.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct UsernamePasswordCredential {
     /// Username for authentication.
     pub username: String,
@@ -80,6 +86,7 @@ pub struct UsernamePasswordCredential {
 
 /// Scanner preference.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScannerPreference {
     /// Preference identifier.
     pub id: String,
@@ -89,6 +96,7 @@ pub struct ScannerPreference {
 
 /// VT parameter.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct Parameter {
     /// Parameter identifier.
     pub id: i32,
@@ -98,6 +106,7 @@ pub struct Parameter {
 
 /// Vulnerability test (VT) specification.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct Vt {
     /// VT OID (Object Identifier).
     pub oid: String,
@@ -108,6 +117,7 @@ pub struct Vt {
 
 /// Type of a scan result, matching the OpenAPI Result.type enum.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ResultType {
     Alarm,
@@ -120,10 +130,12 @@ pub enum ResultType {
 
 /// Response body for GET /scans/preferences – available scanner preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct PreferencesResponse {}
 
 /// Response body for GET /scans/{id} – full scan details.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScanDetailResponse {
     /// The scan UUID.
     pub scan_id: String,
@@ -137,6 +149,7 @@ pub struct ScanDetailResponse {
 
 /// Response body for GET /scans/{id}/status – scan lifecycle and timing.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScanStatusResponse {
     /// Current scan status.
     pub status: ScanStatus,
@@ -153,6 +166,7 @@ pub struct ScanStatusResponse {
 
 /// Host-level progress summary exposed in the scan status response.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct HostInfo {
     /// Total number of hosts in the scan target scope.
     pub all: i32,
@@ -174,6 +188,7 @@ pub struct HostInfo {
 ///
 /// Individual result record with optional fields omitted from JSON serialization.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 pub struct ScanResultResponse {
     /// 0-based result index within the scan.
     pub id: i64,

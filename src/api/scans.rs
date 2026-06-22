@@ -21,6 +21,9 @@ use crate::{
     storage::interface::{StorageError, parse_range},
 };
 
+#[cfg(feature = "api-docs")]
+use crate::api::dto::scans::PreferencesResponse;
+
 /// Query parameters for the GET `/scans/{id}/results` endpoint.
 #[derive(Debug, Deserialize)]
 pub struct ResultRangeQuery {
@@ -80,6 +83,20 @@ fn result_response(r: crate::scan::ScanResult) -> ScanResultResponse {
 // ─── Handlers ────────────────────────────────────────────────────────────────
 
 /// HEAD /scans — Return API and authentication metadata as headers.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        head,
+        path = "/scans",
+        tag = "scan",
+        responses(
+            (status = 204, description = "Scan endpoint metadata", headers(
+                ("api-version" = String, description = "API version"),
+                ("authentication" = String, description = "Authentication mode")
+            ))
+        )
+    )
+)]
 pub async fn head_scans() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -96,6 +113,22 @@ pub async fn head_scans() -> impl IntoResponse {
 /// POST /scans — Create a new scan and return its UUID.
 ///
 /// Returns 201 Created with the generated or provided scan ID if successful.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        post,
+        path = "/scans",
+        tag = "scan",
+        request_body = ScanRequest,
+        responses(
+            (status = 201, description = "Scan created", body = String, content_type = "application/json"),
+            (status = 400, description = "Bad request"),
+            (status = 403, description = "Scan already exists"),
+            (status = 406, description = "Invalid scan state"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn create_scan(
     State(state): State<AppState>,
     Json(req): Json<ScanRequest>,
@@ -114,6 +147,18 @@ pub async fn create_scan(
 }
 
 /// GET /scans/preferences — Retrieve available scan preferences.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        get,
+        path = "/scans/preferences",
+        tag = "scan",
+        responses(
+            (status = 200, description = "Available scan preferences", body = PreferencesResponse),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn get_scan_preferences(State(state): State<AppState>) -> impl IntoResponse {
     match state.scan_service.get_default_preferences().await {
         Ok(preferences) => Json(preferences).into_response(),
@@ -125,6 +170,20 @@ pub async fn get_scan_preferences(State(state): State<AppState>) -> impl IntoRes
 ///
 /// Returns the target, scan preferences, and VTs for the requested scan.
 /// Returns 404 if the scan does not exist.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        get,
+        path = "/scans/{id}",
+        tag = "scan",
+        params(("id" = String, Path, description = "Scan ID")),
+        responses(
+            (status = 200, description = "Scan details", body = ScanDetailResponse),
+            (status = 404, description = "Scan not found"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     match state.scan_service.get_scan(&id).await {
         Ok(scan) => Json(ScanDetailResponse {
@@ -141,6 +200,23 @@ pub async fn get_scan(State(state): State<AppState>, Path(id): Path<String>) -> 
 /// POST /scans/{id} — Perform an action on a scan (start or stop).
 ///
 /// Enforces non-idempotent start and stop transitions. Returns 406 if invalid.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        post,
+        path = "/scans/{id}",
+        tag = "scan",
+        params(("id" = String, Path, description = "Scan ID")),
+        request_body = ScanActionRequest,
+        responses(
+            (status = 204, description = "Scan action accepted"),
+            (status = 400, description = "Bad request"),
+            (status = 404, description = "Scan not found"),
+            (status = 406, description = "Invalid scan transition"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn scan_action(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -160,6 +236,21 @@ pub async fn scan_action(
 /// DELETE /scans/{id} — Delete a scan and all its results.
 ///
 /// Returns 406 if the scan is not in `new` or a terminal status.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        delete,
+        path = "/scans/{id}",
+        tag = "scan",
+        params(("id" = String, Path, description = "Scan ID")),
+        responses(
+            (status = 204, description = "Scan deleted"),
+            (status = 404, description = "Scan not found"),
+            (status = 406, description = "Scan cannot be deleted in the current state"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn delete_scan(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -174,6 +265,24 @@ pub async fn delete_scan(
 ///
 /// Query parameter `range` accepts `N` (all from N onward) or `N-M` (inclusive range).
 /// Defaults to all results if not specified.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        get,
+        path = "/scans/{id}/results",
+        tag = "scan",
+        params(
+            ("id" = String, Path, description = "Scan ID"),
+            ("range" = Option<String>, Query, description = "Optional result range such as 5 or 0-10")
+        ),
+        responses(
+            (status = 200, description = "Scan results", body = [ScanResultResponse]),
+            (status = 400, description = "Bad range specification"),
+            (status = 404, description = "Scan not found"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn get_scan_results(
     State(state): State<AppState>,
     Path(id): Path<String>,
@@ -198,6 +307,24 @@ pub async fn get_scan_results(
 /// GET /scans/{id}/results/{rid} — Retrieve a single scan result by index.
 ///
 /// The `{rid}` parameter is a 0-based result index. Returns 404 if not found.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        get,
+        path = "/scans/{id}/results/{rid}",
+        tag = "scan",
+        params(
+            ("id" = String, Path, description = "Scan ID"),
+            ("rid" = i64, Path, description = "Result index")
+        ),
+        responses(
+            (status = 200, description = "Scan result", body = ScanResultResponse),
+            (status = 400, description = "Invalid result index"),
+            (status = 404, description = "Scan result not found"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn get_scan_result(
     State(state): State<AppState>,
     Path((id, rid)): Path<(String, String)>,
@@ -216,6 +343,20 @@ pub async fn get_scan_result(
 /// GET /scans/{id}/status — Retrieve the current status and timestamps of a scan.
 ///
 /// Returns the status, start time, and end time of the scan.
+#[cfg_attr(
+    feature = "api-docs",
+    utoipa::path(
+        get,
+        path = "/scans/{id}/status",
+        tag = "scan",
+        params(("id" = String, Path, description = "Scan ID")),
+        responses(
+            (status = 200, description = "Scan status", body = ScanStatusResponse),
+            (status = 404, description = "Scan not found"),
+            (status = 500, description = "Internal server error")
+        )
+    )
+)]
 pub async fn get_scan_status(
     State(state): State<AppState>,
     Path(id): Path<String>,

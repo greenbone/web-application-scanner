@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// Lifecycle phase of a scan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ScanStatus {
     Stored,
