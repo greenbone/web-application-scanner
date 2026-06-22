@@ -25,6 +25,24 @@ make DESTDIR=path/to/install install
 
 The binary can be found at `path/to/install/usr/local/bin` afterwards.
 
+### Build Features
+
+The project supports the following build features:
+
+#### `api-docs` (enabled by default)
+
+Enables dynamically generated OpenAPI 3.0 documentation endpoints served as Swagger UI and YAML/JSON specs.
+
+**Default build (with docs enabled):**
+```sh
+cargo build
+```
+
+**Production build (docs disabled):**
+```sh
+cargo build --release --no-default-features
+```
+
 ## Configuration
 
 WAS reads configuration from environment variables prefixed with
@@ -53,6 +71,13 @@ URL `sqlite:/var/lib/greenbone-was/scans.db`. Set
 `GREENBONE_WAS_SQLITE_URL` when a fully explicit file-backed SQLite URL is
 required.
 
+## API documentation
+
+Unless the default `api-docs` flag is disabled, the Web Application Scanner will serve API documentation at the following endpoints:
+
+- `GET /doc` — Interactive Swagger UI documentation
+- `GET /doc/openapi.yml` — OpenAPI 3.0 YAML specification
+- `GET /doc/openapi.json` — OpenAPI 3.0 JSON specification
 
 ## Maintainer
 
