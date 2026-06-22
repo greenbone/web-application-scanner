@@ -6,6 +6,10 @@ description = "Greenbone web application scanner"
 publish = false
 default-run = "greenbone-was"
 
+[features]
+default = ["api-docs"]
+api-docs = ["utoipa", "utoipa-swagger-ui"]
+
 [[bin]]
 name = "greenbone-was"
 path = "src/main.rs"
@@ -35,6 +39,8 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["default", "env-filter", "fmt", "json"] }
 uuid = { version = "1", features = ["v4"] }
 regex = "1.12.3"
+utoipa = { version = "5", features = ["axum_extras"], optional = true }
+utoipa-swagger-ui = { version = "9", features = ["axum"], optional = true }
 
 [dev-dependencies]
 serial_test = "3.5.0"
