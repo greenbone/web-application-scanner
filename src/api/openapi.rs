@@ -78,3 +78,7 @@ pub async fn get_openapi_yaml() -> impl IntoResponse {
         yaml,
     )
 }
+
+#[cfg(test)]
+#[path = "openapi_tests.rs"]
+mod openapi_tests;
