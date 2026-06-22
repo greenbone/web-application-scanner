@@ -10,6 +10,9 @@ use axum::{
 };
 use tower_http::trace::TraceLayer;
 
+#[cfg(feature = "api-docs")]
+use {utoipa::OpenApi, utoipa_swagger_ui::SwaggerUi};
+
 use crate::{api, app::AppState};
 
 /// Base path for all API endpoints including the API version.
@@ -47,11 +50,24 @@ pub fn build_router(state: AppState) -> Router {
         )
         .route("/scans/{id}/status", get(api::scans::get_scan_status));
 
-    Router::new()
+    #[allow(unused_mut)]
+    let mut router = Router::new()
         .nest(&API_BASE_PATH, public_routes)
         .nest(&API_BASE_PATH, private_routes)
         .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .with_state(state);
+
+    #[cfg(feature = "api-docs")]
+    {
+        use crate::api::openapi::ApiDoc;
+        let swagger_ui = SwaggerUi::new("/doc")
+            .url("/doc/openapi.json", ApiDoc::openapi());
+        router = router
+            .route("/doc/openapi.yml", get(api::openapi::get_openapi_yaml))
+            .merge(swagger_ui);
+    }
+
+    router
 }
 
 #[cfg(test)]
