@@ -7,9 +7,7 @@ use std::sync::Arc;
 use axum::{body::to_bytes, response::IntoResponse};
 
 use crate::{
-    app::AppState,
-    http::router::build_router,
-    scan::DefaultScanService,
+    app::AppState, http::router::build_router, scan::DefaultScanService,
     storage::test_support::temporary_sqlite_storage,
 };
 
@@ -30,9 +28,7 @@ async fn openapi_yaml_handler_returns_valid_yaml() {
     let response = get_openapi_yaml().await.into_response();
     assert_eq!(response.status(), 200);
 
-    let body = to_bytes(response.into_body(), usize::MAX)
-        .await
-        .unwrap();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let yaml = String::from_utf8(body.to_vec()).unwrap();
     assert!(
         yaml.contains("openapi:"),

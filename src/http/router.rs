@@ -60,8 +60,7 @@ pub fn build_router(state: AppState) -> Router {
     #[cfg(feature = "api-docs")]
     {
         use crate::api::openapi::ApiDoc;
-        let swagger_ui = SwaggerUi::new("/doc")
-            .url("/doc/openapi.json", ApiDoc::openapi());
+        let swagger_ui = SwaggerUi::new("/doc").url("/doc/openapi.json", ApiDoc::openapi());
         router = router
             .route("/doc/openapi.yml", get(api::openapi::get_openapi_yaml))
             .merge(swagger_ui);
