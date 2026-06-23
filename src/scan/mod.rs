@@ -7,6 +7,7 @@
 pub mod errors;
 mod model;
 mod observability;
+pub mod preferences;
 pub mod progress;
 pub mod queue;
 pub mod retry;
@@ -23,3 +24,4 @@ pub use service::{CreateScanRequest, DefaultScanService, ScanService, ScanServic
 pub use state_coordinator::{RetryingScanStateCoordinator, ScanStateCoordinator};
 pub use status::ScanStatus;
 pub use worker::{ScanRuntimeConfig, ScanRuntimeHandle, start_scan_runtime};
+
