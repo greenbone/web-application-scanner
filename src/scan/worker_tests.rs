@@ -665,6 +665,23 @@ async fn wait_for_status(storage: &dyn ScanStorage, scan_id: &str, expected: Sca
     panic!("scan did not reach expected status");
 }
 
+async fn wait_for_passive_running(storage: &dyn ScanStorage, scan_id: &str) {
+    for _ in 0..200 {
+        let scan = storage.get_scan(scan_id).await.unwrap();
+        let passive_state = scan
+            .progress
+            .as_ref()
+            .and_then(|progress| progress.pointer("/targets/0/passive_scan_state"))
+            .and_then(serde_json::Value::as_str);
+        if passive_state == Some("running") {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("scan did not reach passive running state");
+}
+
 async fn wait_for_request_path(server: &MockServer, expected_path: &str) {
     for _ in 0..200 {
         let seen = server
@@ -698,6 +715,7 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -752,6 +770,7 @@ async fn runtime_skips_active_scan_when_scan_mode_is_safe() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -784,6 +803,7 @@ async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -815,6 +835,7 @@ async fn runtime_keeps_succeeded_status_when_context_cleanup_fails() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -889,6 +910,7 @@ async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_cl
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -926,6 +948,7 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -950,6 +973,44 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
 }
 
 #[tokio::test]
+async fn runtime_stop_running_scan_in_passive_stage_transitions_to_stopped_and_clears_stop_requested(
+) {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_secs(2),
+            stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+
+    service.stop_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Stopped).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Stopped);
+    assert!(!scan.stop_requested);
+}
+
+#[tokio::test]
 async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_for_running_stop_in_active_stage_with_stop_failure().await;
@@ -962,6 +1023,7 @@ async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -997,6 +1059,7 @@ async fn runtime_forces_failed_when_stop_grace_period_expires() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_millis(50),
             ..ScanRuntimeConfig::default()
         },

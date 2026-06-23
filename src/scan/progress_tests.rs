@@ -21,6 +21,8 @@ fn new_creates_pending_targets_with_zero_progress() {
         assert_eq!(target.spider_last_status, None);
         assert_eq!(target.active_scan_state, StageState::Pending);
         assert_eq!(target.active_scan_percentage, 0);
+        assert_eq!(target.passive_scan_state, StageState::Pending);
+        assert_eq!(target.passive_scan_percentage, 0);
         assert_eq!(target.overall_percentage, 0);
     }
 }
@@ -73,12 +75,12 @@ fn overall_percentage_applies_formula_for_active_scan_at_50_percent() {
     progress.mark_active_scan_running(0);
     progress.update_active_scan(0, 50);
 
-    // floor(25 + 0.75 * 50) = floor(62.5) = 62
-    assert_eq!(progress.targets[0].overall_percentage, 62);
+    // floor(25 + 0.70 * 50 + 0.05 * 0) = 60
+    assert_eq!(progress.targets[0].overall_percentage, 60);
 }
 
 #[test]
-fn overall_percentage_is_100_when_active_scan_done() {
+fn overall_percentage_is_95_when_active_scan_done_and_passive_scan_is_pending() {
     let hosts = vec!["http://a.example".to_string()];
     let mut progress = ScanProgress::new(&hosts);
 
@@ -86,7 +88,21 @@ fn overall_percentage_is_100_when_active_scan_done() {
     progress.mark_spider_done(0);
     progress.mark_active_scan_done(0);
 
-    // floor(25 + 0.75 * 100) = 100
+    // floor(25 + 0.70 * 100 + 0.05 * 0) = 95
+    assert_eq!(progress.targets[0].overall_percentage, 95);
+}
+
+#[test]
+fn overall_percentage_is_100_when_active_and_passive_scan_done() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.mark_passive_scan_done(0);
+
+    // floor(25 + 0.70 * 100 + 0.05 * 100) = 100
     assert_eq!(progress.targets[0].overall_percentage, 100);
 }
 
@@ -190,6 +206,78 @@ fn mark_active_scan_done_sets_percentage_to_100() {
     assert_eq!(progress.targets[0].active_scan_state, StageState::Done);
 }
 
+// ─── mark_passive_scan_running ───────────────────────────────────────────────
+
+#[test]
+fn mark_passive_scan_running_sets_state_to_running() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.mark_passive_scan_running(0);
+
+    assert_eq!(progress.targets[0].passive_scan_state, StageState::Running);
+}
+
+// ─── update_passive_scan ─────────────────────────────────────────────────────
+
+#[test]
+fn update_passive_scan_clamps_negative_percentage_to_zero() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.update_passive_scan(0, -10);
+
+    assert_eq!(progress.targets[0].passive_scan_percentage, 0);
+}
+
+#[test]
+fn update_passive_scan_clamps_percentage_above_100() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.update_passive_scan(0, 150);
+
+    assert_eq!(progress.targets[0].passive_scan_percentage, 100);
+}
+
+#[test]
+fn update_passive_scan_at_100_transitions_state_to_done() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.update_passive_scan(0, 100);
+
+    assert_eq!(progress.targets[0].passive_scan_state, StageState::Done);
+}
+
+// ─── mark_passive_scan_done ──────────────────────────────────────────────────
+
+#[test]
+fn mark_passive_scan_done_sets_percentage_to_100() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.mark_passive_scan_done(0);
+
+    assert_eq!(progress.targets[0].passive_scan_percentage, 100);
+    assert_eq!(progress.targets[0].passive_scan_state, StageState::Done);
+}
+
 // ─── overall_percentage (multi-target) ───────────────────────────────────────
 
 #[test]
@@ -207,9 +295,10 @@ fn overall_percentage_is_average_of_target_percentages() {
     // overall = (1 + 0) / 2 = 0 (integer division)
     assert_eq!(progress.overall_percentage, 0);
 
-    // Target 0: spider done + active 100% → overall = 100
+    // Target 0: spider done + active 100% + passive 100% → overall = 100
     progress.mark_spider_done(0);
     progress.mark_active_scan_done(0);
+    progress.mark_passive_scan_done(0);
     // overall = (100 + 0) / 2 = 50
     assert_eq!(progress.overall_percentage, 50);
 }
@@ -230,6 +319,7 @@ fn as_value_serializes_to_json_and_deserializes_back() {
 
     assert_eq!(restored.targets[0].spider_state, StageState::Done);
     assert_eq!(restored.targets[0].active_scan_percentage, 50);
-    assert_eq!(restored.targets[0].overall_percentage, 62);
-    assert_eq!(restored.overall_percentage, 62);
+    assert_eq!(restored.targets[0].passive_scan_percentage, 0);
+    assert_eq!(restored.targets[0].overall_percentage, 60);
+    assert_eq!(restored.overall_percentage, 60);
 }

@@ -29,6 +29,7 @@ use crate::{
 
 const DEFAULT_SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const DEFAULT_ALERT_PAGE_SIZE: u32 = 100;
+const DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone)]
 pub struct ScanRuntimeConfig {
@@ -36,6 +37,7 @@ pub struct ScanRuntimeConfig {
     pub alert_poll_interval: Duration,
     pub scan_poll_interval: Duration,
     pub alert_page_size: u32,
+    pub passive_scan_placeholder_duration: Duration,
     pub stop_grace_period: Duration,
     /// Maximum number of retry attempts for transient failures before a scan transitions to `failed`.
     pub retry_max_retries: u32,
@@ -50,6 +52,7 @@ impl Default for ScanRuntimeConfig {
             alert_poll_interval: Duration::from_secs(10),
             scan_poll_interval: DEFAULT_SCAN_POLL_INTERVAL,
             alert_page_size: DEFAULT_ALERT_PAGE_SIZE,
+            passive_scan_placeholder_duration: DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION,
             stop_grace_period: Duration::from_secs(300),
             retry_max_retries: 10,
             retry_max_delay: Duration::from_secs(60),
@@ -150,6 +153,7 @@ pub fn start_scan_runtime(
 enum RunningStage<'a> {
     Spider,
     ActiveScan { active_scan_id: &'a str },
+    PassiveScan,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -260,10 +264,7 @@ impl ScanWorker {
             if scan_mode == ScanMode::Safe {
                 self.run_safe_mode_phase(&scan.id, &context_name, target, index, &mut progress)
                     .await?;
-                continue;
-            }
-
-            if self
+            } else if self
                 .run_active_scan_phase(
                     &scan.id,
                     &context_name,
@@ -272,6 +273,14 @@ impl ScanWorker {
                     index,
                     &mut progress,
                 )
+                .await?
+                == ScanExecutionControl::StopExecution
+            {
+                return Ok(());
+            }
+
+            if self
+                .run_passive_scan_phase(&scan.id, &context_name, index, &mut progress)
                 .await?
                 == ScanExecutionControl::StopExecution
             {
@@ -381,6 +390,31 @@ impl ScanWorker {
         Ok(())
     }
 
+    async fn run_passive_scan_phase(
+        &self,
+        scan_id: &str,
+        context_name: &str,
+        index: usize,
+        progress: &mut ScanProgress,
+    ) -> Result<ScanExecutionControl, WorkerError> {
+        progress.mark_passive_scan_running(index);
+        self.persist_progress(scan_id, progress).await?;
+
+        let start = Instant::now();
+        while start.elapsed() < self.config.passive_scan_placeholder_duration {
+            if self.stop_requested(scan_id).await? {
+                self.handle_stop_request(scan_id, Some(context_name), RunningStage::PassiveScan)
+                    .await?;
+                return Ok(ScanExecutionControl::StopExecution);
+            }
+            sleep(self.config.scan_poll_interval).await;
+        }
+
+        progress.mark_passive_scan_done(index);
+        self.persist_progress(scan_id, progress).await?;
+        Ok(ScanExecutionControl::Continue)
+    }
+
     async fn run_active_scan_phase(
         &self,
         scan_id: &str,
@@ -475,6 +509,7 @@ impl ScanWorker {
             RunningStage::ActiveScan { active_scan_id } => {
                 self.zap_client.stop_active_scan(active_scan_id).await?;
             }
+            RunningStage::PassiveScan => {}
         }
 
         self.complete_stop_request(scan_id, context_name).await
