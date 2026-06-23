@@ -6,9 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StageState {
+    #[default]
     Pending,
     Running,
     Done,
@@ -21,6 +22,10 @@ pub struct TargetProgress {
     pub spider_last_status: Option<String>,
     pub active_scan_state: StageState,
     pub active_scan_percentage: i32,
+    #[serde(default)]
+    pub passive_scan_state: StageState,
+    #[serde(default)]
+    pub passive_scan_percentage: i32,
     pub overall_percentage: i32,
 }
 
@@ -41,6 +46,8 @@ impl ScanProgress {
                 spider_last_status: None,
                 active_scan_state: StageState::Pending,
                 active_scan_percentage: 0,
+                passive_scan_state: StageState::Pending,
+                passive_scan_percentage: 0,
                 overall_percentage: 0,
             })
             .collect();
@@ -87,6 +94,28 @@ impl ScanProgress {
         self.refresh();
     }
 
+    pub fn mark_passive_scan_running(&mut self, index: usize) {
+        let target = &mut self.targets[index];
+        target.passive_scan_state = StageState::Running;
+        self.refresh();
+    }
+
+    pub fn update_passive_scan(&mut self, index: usize, percentage: i32) {
+        let target = &mut self.targets[index];
+        target.passive_scan_percentage = percentage.clamp(0, 100);
+        if target.passive_scan_percentage >= 100 {
+            target.passive_scan_state = StageState::Done;
+        }
+        self.refresh();
+    }
+
+    pub fn mark_passive_scan_done(&mut self, index: usize) {
+        let target = &mut self.targets[index];
+        target.passive_scan_state = StageState::Done;
+        target.passive_scan_percentage = 100;
+        self.refresh();
+    }
+
     pub fn as_value(&self) -> serde_json::Value {
         serde_json::to_value(self).expect("scan progress should serialize")
     }
@@ -96,8 +125,9 @@ impl ScanProgress {
             let spider_done = matches!(target.spider_state, StageState::Done);
             let spider_running = matches!(target.spider_state, StageState::Running);
             let active_pct = target.active_scan_percentage.clamp(0, 100) as f64;
+            let passive_pct = target.passive_scan_percentage.clamp(0, 100) as f64;
             target.overall_percentage = if spider_done {
-                (25.0 + (0.75 * active_pct)).floor() as i32
+                (25.0 + (0.70 * active_pct) + (0.05 * passive_pct)).floor() as i32
             } else if spider_running {
                 1
             } else {

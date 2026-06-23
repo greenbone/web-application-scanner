@@ -390,12 +390,12 @@ fn progress_to_host_info(progress: &ScanProgress) -> HostInfo {
     let finished = progress
         .targets
         .iter()
-        .filter(|t| t.active_scan_state == StageState::Done)
+        .filter(|t| t.passive_scan_state == StageState::Done)
         .count() as i32;
     let mut scanning = BTreeMap::new();
     for target in progress.targets.iter() {
         if target.spider_state != StageState::Pending
-            && target.active_scan_state != StageState::Done
+            && target.passive_scan_state != StageState::Done
         {
             scanning.insert(target.target.clone(), target.overall_percentage);
         }

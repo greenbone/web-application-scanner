@@ -305,9 +305,9 @@ fn active_scan_running_target_appears_in_scanning_with_formula_progress() {
 
     let info = progress_to_host_info(&progress);
 
-    // floor(25 + 0.75 * 50) = 62
+    // floor(25 + 0.70 * 50 + 0.05 * 0) = 60
     assert_eq!(info.scanning.len(), 1);
-    assert_eq!(info.scanning.get("http://a.example"), Some(&62));
+    assert_eq!(info.scanning.get("http://a.example"), Some(&60));
     assert_eq!(info.queued, 0);
     assert_eq!(info.finished, 0);
 }
@@ -315,11 +315,26 @@ fn active_scan_running_target_appears_in_scanning_with_formula_progress() {
 // ─── active scan done ─────────────────────────────────────────────────────────
 
 #[test]
-fn active_scan_done_target_counted_as_finished() {
+fn active_scan_done_target_is_still_scanning_until_passive_scan_is_done() {
     let mut progress = make_progress(&["http://a.example"]);
     progress.mark_spider_running(0);
     progress.mark_spider_done(0);
     progress.mark_active_scan_done(0);
+
+    let info = progress_to_host_info(&progress);
+
+    assert_eq!(info.finished, 0);
+    assert_eq!(info.queued, 0);
+    assert_eq!(info.scanning.get("http://a.example"), Some(&95));
+}
+
+#[test]
+fn passive_scan_done_target_counted_as_finished() {
+    let mut progress = make_progress(&["http://a.example"]);
+    progress.mark_spider_running(0);
+    progress.mark_spider_done(0);
+    progress.mark_active_scan_done(0);
+    progress.mark_passive_scan_done(0);
 
     let info = progress_to_host_info(&progress);
 
@@ -342,7 +357,7 @@ fn mixed_targets_populate_queued_scanning_and_finished_correctly() {
     // index 0: stays pending (queued)
     // index 1: spider running (scanning, progress = 1)
     progress.mark_spider_running(1);
-    // index 2: spider done, active scan at 40% (scanning, progress = floor(25 + 30) = 55)
+    // index 2: spider done, active scan at 40% (scanning, progress = floor(25 + 28 + 0) = 53)
     progress.mark_spider_running(2);
     progress.mark_spider_done(2);
     progress.mark_active_scan_running(2);
@@ -351,6 +366,7 @@ fn mixed_targets_populate_queued_scanning_and_finished_correctly() {
     progress.mark_spider_running(3);
     progress.mark_spider_done(3);
     progress.mark_active_scan_done(3);
+    progress.mark_passive_scan_done(3);
 
     let info = progress_to_host_info(&progress);
 
@@ -360,7 +376,7 @@ fn mixed_targets_populate_queued_scanning_and_finished_correctly() {
     assert_eq!(info.scanning.len(), 2);
     assert_eq!(info.alive, 1);
     assert_eq!(info.scanning.get("http://spider.example"), Some(&1));
-    assert_eq!(info.scanning.get("http://active.example"), Some(&55));
+    assert_eq!(info.scanning.get("http://active.example"), Some(&53));
 }
 
 // ─── empty target list ────────────────────────────────────────────────────────
