@@ -125,6 +125,7 @@ async fn openapi_spec_includes_all_dto_schemas() {
     assert!(components["ScanStatusResponse"].is_object());
     assert!(components["ScanResultResponse"].is_object());
     assert!(components["PreferencesResponse"].is_object());
+    assert!(components["ScannerPreferenceMetadata"].is_object());
     assert!(components["Target"].is_object());
     assert!(components["Credential"].is_object());
     assert!(components["UsernamePasswordCredential"].is_object());
