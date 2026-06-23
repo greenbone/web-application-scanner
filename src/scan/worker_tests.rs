@@ -11,7 +11,7 @@ use wiremock::{
 };
 
 use crate::{
-    api::dto::scans::{ResultType, Target},
+    api::dto::scans::{ResultType, ScannerPreference, Target},
     scan::{
         CreateScanRequest, DefaultScanService, ScanRuntimeConfig, ScanService, ScanStatus,
         start_scan_runtime,
@@ -28,7 +28,26 @@ fn make_request(host: &str) -> CreateScanRequest {
             excluded_hosts: vec![],
             credentials: vec![],
         },
-        scan_preferences: vec![],
+        scan_preferences: vec![ScannerPreference {
+            id: "scan_mode".to_string(),
+            value: "active".to_string(),
+        }],
+        vts: vec![],
+    }
+}
+
+fn make_safe_mode_request(host: &str) -> CreateScanRequest {
+    CreateScanRequest {
+        scan_id: None,
+        target: Target {
+            hosts: vec![host.to_string()],
+            excluded_hosts: vec![],
+            credentials: vec![],
+        },
+        scan_preferences: vec![ScannerPreference {
+            id: "scan_mode".to_string(),
+            value: "safe".to_string(),
+        }],
         vts: vec![],
     }
 }
@@ -97,6 +116,78 @@ async fn mock_zap_server() -> MockServer {
     Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
         .and(body_string_contains("start=1"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    server
+}
+
+async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
         )
@@ -645,6 +736,39 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
     assert_eq!(results[0].protocol.as_deref(), Some("tcp"));
     assert!(logs_contain("scan status transition"));
     assert!(logs_contain("scan_queue_wait_seconds"));
+}
+
+#[traced_test]
+#[tokio::test]
+async fn runtime_skips_active_scan_when_scan_mode_is_safe() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_safe_mode_without_active_scan_requests().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_safe_mode_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Succeeded);
+    assert!(logs_contain("active scan skipped due to scan_mode=safe"));
 }
 
 #[tokio::test]
