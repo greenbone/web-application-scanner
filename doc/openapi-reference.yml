@@ -701,6 +701,7 @@ components:
             type: "string"
           type:
             description: "Type of the preference"
+            type: "string"
           name:
             description: "Display name for the preference"
             type: "string"
@@ -711,8 +712,14 @@ components:
             description: "Default value for scans"
             type: "string"
           values:
-            description: "Allowed values"
+            description: "Allowed values as semicolon-separated string"
             type: "string"
+        required:
+          - "id"
+          - "type"
+          - "name"
+          - "description"
+          - "default"
 
   examples:
     scan_simple:
@@ -793,9 +800,8 @@ components:
             },
           "scan_preferences":
             [
-              { "id": "target_port", "value": "443" },
-              { "id": "use_https", "value": "1" },
-              { "id": "profile", "value": "fast_scan" },
+              { "id": "scan_mode", "value": "safe" },
+              { "id": "ajax_spider_timeout", "value": "0" },
             ],
           "vts":
             [
@@ -874,9 +880,8 @@ components:
             },
           "scan_preferences":
             [
-              { "id": "target_port", "value": "443" },
-              { "id": "use_https", "value": "1" },
-              { "id": "profile", "value": "fast_scan" },
+              { "id": "scan_mode", "value": "safe" },
+              { "id": "ajax_spider_timeout", "value": "0" },
             ],
           "vts":
             [
@@ -1098,15 +1103,18 @@ components:
       value:
         [
           {
-            "id": "optimize_test",
-            "name": "Optimize Test",
-            "default": true,
-            "description": "By default, optimize_test is enabled which means openvas does trust the remote host banners and is only launching plugins against the services they have been designed to check. For example it will check a web server claiming to be IIS only for IIS related flaws but will skip plugins testing for Apache flaws, and so on. This default behavior is used to optimize the scanning performance and to avoid false positives. If you are not sure that the banners of the remote host have been tampered with, you can disable this option.",
+            "id": "scan_mode",
+            "type": "enum",
+            "name": "Scan Mode",
+            "default": "safe",
+            "values": "safe;active",
+            "description": "Scan mode: 'safe' disables active scans, 'active' enables active scans.",
           },
           {
-            "id": "plugins_timeout",
-            "name": "Plugins Timeout",
-            "default": 5,
-            "description": "This is the maximum lifetime, in seconds of a plugin. It may happen that some plugins are slow because of the way they are written or the way the remote server behaves. This option allows you to make sure your scan is never caught in an endless loop because of a non-finishing plugin. Doesn't affect ACT_SCANNER plugins, use 'ACT_SCANNER plugins timeout' for them instead.",
+            "id": "ajax_spider_timeout",
+            "type": "integer",
+            "name": "AJAX Spider Timeout",
+            "default": "0",
+            "description": "Scan-level AJAX spider timeout in seconds, applied per target. Value 0 means unlimited.",
           },
         ]

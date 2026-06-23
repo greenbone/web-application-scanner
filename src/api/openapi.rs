@@ -50,6 +50,7 @@ use crate::{api, scan::status::ScanStatus};
         api::dto::scans::ScanStatusResponse,
         api::dto::scans::ScanResultResponse,
         api::dto::scans::PreferencesResponse,
+        api::dto::scans::ScannerPreferenceMetadata,
         api::dto::scans::Target,
         api::dto::scans::Credential,
         api::dto::scans::UsernamePasswordCredential,

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use super::{
-    Credential, Parameter, ScanAction, ScanActionRequest, ScanDetailResponse, ScanRequest,
-    ScanResultResponse, ScanStatusResponse, ScannerPreference, Target, UsernamePasswordCredential,
-    Vt,
+    Credential, Parameter, PreferencesResponse, ScanAction, ScanActionRequest, ScanDetailResponse,
+    ScanRequest, ScanResultResponse, ScanStatusResponse, ScannerPreference,
+    ScannerPreferenceMetadata, Target, UsernamePasswordCredential, Vt,
 };
 use crate::{api::dto::scans::ResultType, scan::ScanStatus};
 
@@ -234,4 +234,49 @@ fn host_info_round_trips_with_serde_json() {
     let json = serde_json::to_string(&info).expect("host info should serialize");
     let decoded = serde_json::from_str::<HostInfo>(&json).expect("host info should deserialize");
     assert_eq!(decoded, info);
+}
+
+#[test]
+fn preferences_response_round_trips_as_array_payload() {
+    let payload = PreferencesResponse(vec![ScannerPreferenceMetadata {
+        id: "scan_mode".to_string(),
+        preference_type: "enum".to_string(),
+        name: "Scan Mode".to_string(),
+        description: "Scan mode for active scanning".to_string(),
+        default_value: "safe".to_string(),
+        values: Some("safe;active".to_string()),
+    }]);
+
+    let json = serde_json::to_value(&payload).expect("preferences response should serialize");
+    assert!(json.is_array(), "preferences response must serialize as array");
+    assert_eq!(json[0]["id"], "scan_mode");
+    assert_eq!(json[0]["type"], "enum");
+    assert_eq!(json[0]["default"], "safe");
+    assert_eq!(json[0]["values"], "safe;active");
+
+    let decoded =
+        serde_json::from_value::<PreferencesResponse>(json).expect("preferences should deserialize");
+    assert_eq!(decoded, payload);
+}
+
+#[test]
+fn preferences_response_supports_ajax_spider_timeout_definition() {
+    let json = serde_json::json!([
+        {
+            "id": "ajax_spider_timeout",
+            "type": "integer",
+            "name": "AJAX Spider Timeout",
+            "description": "Scan-level timeout in seconds; 0 means unlimited",
+            "default": "0"
+        }
+    ]);
+
+    let decoded = serde_json::from_value::<PreferencesResponse>(json)
+        .expect("ajax_spider_timeout preference should deserialize");
+
+    assert_eq!(decoded.0.len(), 1);
+    assert_eq!(decoded.0[0].id, "ajax_spider_timeout");
+    assert_eq!(decoded.0[0].preference_type, "integer");
+    assert_eq!(decoded.0[0].default_value, "0");
+    assert!(decoded.0[0].values.is_none());
 }

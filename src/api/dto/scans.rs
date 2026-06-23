@@ -131,7 +131,32 @@ pub enum ResultType {
 /// Response body for GET /scans/preferences – available scanner preferences.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
-pub struct PreferencesResponse {}
+#[serde(transparent)]
+pub struct PreferencesResponse(
+    /// Available scanner preferences and their default values.
+    pub Vec<ScannerPreferenceMetadata>,
+);
+
+/// Metadata entry returned by GET /scans/preferences.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "api-docs", derive(utoipa::ToSchema))]
+pub struct ScannerPreferenceMetadata {
+    /// Preference identifier.
+    pub id: String,
+    /// Preference value type (for example: enum, integer).
+    #[serde(rename = "type")]
+    pub preference_type: String,
+    /// Display name for the preference.
+    pub name: String,
+    /// Human-readable preference description.
+    pub description: String,
+    /// Default value for new scans.
+    #[serde(rename = "default")]
+    pub default_value: String,
+    /// Allowed values for constrained preference types, represented as a semicolon-separated string.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub values: Option<String>,
+}
 
 /// Response body for GET /scans/{id} – full scan details.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
