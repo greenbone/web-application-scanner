@@ -152,6 +152,12 @@ enum RunningStage<'a> {
     ActiveScan { active_scan_id: &'a str },
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ScanExecutionControl {
+    Continue,
+    StopExecution,
+}
+
 struct ScanWorker {
     worker_index: usize,
     storage: StorageHandle,
@@ -222,124 +228,55 @@ impl ScanWorker {
     async fn execute_scan(&self, scan: &Scan) -> Result<(), WorkerError> {
         let mut progress = ScanProgress::new(&scan.target.hosts);
         let scan_mode = Self::resolve_scan_mode(scan);
-
-        {
-            let pv = progress.as_value();
-            self.scan_state.update_progress(&scan.id, Some(pv)).await?;
-        }
+        self.persist_progress(&scan.id, &progress).await?;
 
         let (context_name, context_id) = self.ensure_context(scan).await?;
 
-        if self.stop_requested(&scan.id).await? {
-            self.complete_stop_request(&scan.id, Some(&context_name))
-                .await?;
+        if self
+            .complete_stop_if_requested(&scan.id, &context_name)
+            .await?
+            == ScanExecutionControl::StopExecution
+        {
             return Ok(());
         }
 
         for (index, target) in scan.target.hosts.iter().enumerate() {
-            if self.stop_requested(&scan.id).await? {
-                self.complete_stop_request(&scan.id, Some(&context_name))
-                    .await?;
+            if self
+                .complete_stop_if_requested(&scan.id, &context_name)
+                .await?
+                == ScanExecutionControl::StopExecution
+            {
                 return Ok(());
             }
 
-            progress.mark_spider_running(index);
+            if self
+                .run_spider_phase(&scan.id, &context_name, target, index, &mut progress)
+                .await?
+                == ScanExecutionControl::StopExecution
             {
-                let pv = progress.as_value();
-                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+                return Ok(());
             }
-
-            self.zap_client
-                .start_ajax_spider_scan(&context_name, target, true, false)
-                .await?;
-
-            loop {
-                if self.stop_requested(&scan.id).await? {
-                    self.handle_stop_request(&scan.id, Some(&context_name), RunningStage::Spider)
-                        .await?;
-                    return Ok(());
-                }
-
-                let status = self.zap_client.get_ajax_spider_status().await?;
-                match status {
-                    AjaxSpiderStatus::Running => sleep(self.config.scan_poll_interval).await,
-                    AjaxSpiderStatus::Stopped => break,
-                }
-            }
-
-            progress.mark_spider_done(index);
 
             if scan_mode == ScanMode::Safe {
-                debug!(
-                    scan_id = scan.id,
-                    target,
-                    "active scan skipped due to scan_mode=safe"
-                );
-                progress.mark_active_scan_done(index);
-                {
-                    let pv = progress.as_value();
-                    self.scan_state.update_progress(&scan.id, Some(pv)).await?;
-                }
-                self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
+                self.run_safe_mode_phase(&scan.id, &context_name, target, index, &mut progress)
                     .await?;
                 continue;
             }
 
-            progress.mark_active_scan_running(index);
+            if self
+                .run_active_scan_phase(
+                    &scan.id,
+                    &context_name,
+                    &context_id,
+                    target,
+                    index,
+                    &mut progress,
+                )
+                .await?
+                == ScanExecutionControl::StopExecution
             {
-                let pv = progress.as_value();
-                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+                return Ok(());
             }
-
-            let active_scan_id = self
-                .zap_client
-                .start_active_scan(&context_id, target, true, true)
-                .await?;
-            let mut last_alert_poll = Instant::now() - self.config.alert_poll_interval;
-
-            loop {
-                if self.stop_requested(&scan.id).await? {
-                    self.handle_stop_request(
-                        &scan.id,
-                        Some(&context_name),
-                        RunningStage::ActiveScan {
-                            active_scan_id: &active_scan_id,
-                        },
-                    )
-                    .await?;
-                    return Ok(());
-                }
-
-                if last_alert_poll.elapsed() >= self.config.alert_poll_interval {
-                    self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
-                        .await?;
-                    last_alert_poll = Instant::now();
-                }
-
-                let active_percentage = self
-                    .zap_client
-                    .get_active_scan_status(&active_scan_id)
-                    .await?;
-                progress.update_active_scan(index, active_percentage);
-                {
-                    let pv = progress.as_value();
-                    self.scan_state.update_progress(&scan.id, Some(pv)).await?;
-                }
-
-                if active_percentage >= 100 {
-                    break;
-                }
-
-                sleep(self.config.scan_poll_interval).await;
-            }
-
-            progress.mark_active_scan_done(index);
-            {
-                let pv = progress.as_value();
-                self.scan_state.update_progress(&scan.id, Some(pv)).await?;
-            }
-            self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
-                .await?;
         }
 
         self.poll_and_persist_alerts(
@@ -349,9 +286,11 @@ impl ScanWorker {
         )
         .await?;
 
-        if self.stop_requested(&scan.id).await? {
-            self.complete_stop_request(&scan.id, Some(&context_name))
-                .await?;
+        if self
+            .complete_stop_if_requested(&scan.id, &context_name)
+            .await?
+            == ScanExecutionControl::StopExecution
+        {
             return Ok(());
         }
 
@@ -364,6 +303,140 @@ impl ScanWorker {
             .await?;
 
         Ok(())
+    }
+
+    async fn persist_progress(
+        &self,
+        scan_id: &str,
+        progress: &ScanProgress,
+    ) -> Result<(), WorkerError> {
+        let pv = progress.as_value();
+        self.scan_state.update_progress(scan_id, Some(pv)).await?;
+        Ok(())
+    }
+
+    async fn complete_stop_if_requested(
+        &self,
+        scan_id: &str,
+        context_name: &str,
+    ) -> Result<ScanExecutionControl, WorkerError> {
+        if self.stop_requested(scan_id).await? {
+            self.complete_stop_request(scan_id, Some(context_name)).await?;
+            return Ok(ScanExecutionControl::StopExecution);
+        }
+        Ok(ScanExecutionControl::Continue)
+    }
+
+    async fn run_spider_phase(
+        &self,
+        scan_id: &str,
+        context_name: &str,
+        target: &str,
+        index: usize,
+        progress: &mut ScanProgress,
+    ) -> Result<ScanExecutionControl, WorkerError> {
+        progress.mark_spider_running(index);
+        self.persist_progress(scan_id, progress).await?;
+
+        self.zap_client
+            .start_ajax_spider_scan(context_name, target, true, false)
+            .await?;
+
+        loop {
+            if self.stop_requested(scan_id).await? {
+                self.handle_stop_request(scan_id, Some(context_name), RunningStage::Spider)
+                    .await?;
+                return Ok(ScanExecutionControl::StopExecution);
+            }
+
+            let status = self.zap_client.get_ajax_spider_status().await?;
+            match status {
+                AjaxSpiderStatus::Running => sleep(self.config.scan_poll_interval).await,
+                AjaxSpiderStatus::Stopped => break,
+            }
+        }
+
+        progress.mark_spider_done(index);
+        self.persist_progress(scan_id, progress).await?;
+        Ok(ScanExecutionControl::Continue)
+    }
+
+    async fn run_safe_mode_phase(
+        &self,
+        scan_id: &str,
+        context_name: &str,
+        target: &str,
+        index: usize,
+        progress: &mut ScanProgress,
+    ) -> Result<(), WorkerError> {
+        debug!(
+            scan_id,
+            target,
+            "active scan skipped due to scan_mode=safe"
+        );
+        progress.mark_active_scan_done(index);
+        self.persist_progress(scan_id, progress).await?;
+        self.poll_and_persist_alerts(scan_id, context_name, Some(target))
+            .await?;
+        Ok(())
+    }
+
+    async fn run_active_scan_phase(
+        &self,
+        scan_id: &str,
+        context_name: &str,
+        context_id: &str,
+        target: &str,
+        index: usize,
+        progress: &mut ScanProgress,
+    ) -> Result<ScanExecutionControl, WorkerError> {
+        progress.mark_active_scan_running(index);
+        self.persist_progress(scan_id, progress).await?;
+
+        let active_scan_id = self
+            .zap_client
+            .start_active_scan(context_id, target, true, true)
+            .await?;
+        let mut last_alert_poll = Instant::now() - self.config.alert_poll_interval;
+
+        loop {
+            if self.stop_requested(scan_id).await? {
+                self.handle_stop_request(
+                    scan_id,
+                    Some(context_name),
+                    RunningStage::ActiveScan {
+                        active_scan_id: &active_scan_id,
+                    },
+                )
+                .await?;
+                return Ok(ScanExecutionControl::StopExecution);
+            }
+
+            if last_alert_poll.elapsed() >= self.config.alert_poll_interval {
+                self.poll_and_persist_alerts(scan_id, context_name, Some(target))
+                    .await?;
+                last_alert_poll = Instant::now();
+            }
+
+            let active_percentage = self
+                .zap_client
+                .get_active_scan_status(&active_scan_id)
+                .await?;
+            progress.update_active_scan(index, active_percentage);
+            self.persist_progress(scan_id, progress).await?;
+
+            if active_percentage >= 100 {
+                break;
+            }
+
+            sleep(self.config.scan_poll_interval).await;
+        }
+
+        progress.mark_active_scan_done(index);
+        self.persist_progress(scan_id, progress).await?;
+        self.poll_and_persist_alerts(scan_id, context_name, Some(target))
+            .await?;
+        Ok(ScanExecutionControl::Continue)
     }
 
     async fn stop_requested(&self, scan_id: &str) -> Result<bool, WorkerError> {
