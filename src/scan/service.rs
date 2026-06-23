@@ -7,14 +7,20 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use tracing::warn;
 use uuid::Uuid;
 
 use crate::{
-    api::dto::scans::{PreferencesResponse, ScannerPreference, Target, Vt},
+    api::dto::scans::{
+        PreferencesResponse, ScannerPreference, ScannerPreferenceMetadata, Target, Vt,
+    },
     scan::{
         Scan, ScanResult, ScanRuntimeHandle, ScanServiceError, ScanStateCoordinator, ScanStatus,
         ScanStatusView,
         observability::{emit_scan_created, emit_scan_deleted},
+        preferences::{
+            AJAX_SPIDER_TIMEOUT_PREFERENCE_ID, SCAN_MODE_PREFERENCE_ID, preference_definitions,
+        },
         validation::validate_target_urls,
     },
     storage::{StorageError, StorageHandle},
@@ -100,6 +106,104 @@ impl DefaultScanService {
             other => ScanServiceError::Storage(other),
         }
     }
+
+    fn default_preferences_response() -> PreferencesResponse {
+        PreferencesResponse(
+            preference_definitions()
+                .iter()
+                .map(|pref| ScannerPreferenceMetadata {
+                    id: pref.id.to_string(),
+                    preference_type: pref.value_type.as_str().to_string(),
+                    name: pref.name.to_string(),
+                    description: pref.description.to_string(),
+                    default_value: pref.default_value.to_string(),
+                    values: if pref.allowed_values.is_empty() {
+                        None
+                    } else {
+                        Some(pref.allowed_values.join(";"))
+                    },
+                })
+                .collect(),
+        )
+    }
+
+    fn resolve_scan_preferences(
+        scan_preferences: Vec<ScannerPreference>,
+    ) -> Result<Vec<ScannerPreference>, ScanServiceError> {
+        let mut scan_mode = preference_definitions()
+            .iter()
+            .find(|p| p.id == SCAN_MODE_PREFERENCE_ID)
+            .map(|p| p.default_value.to_string())
+            .unwrap_or_else(|| "safe".to_string());
+
+        let mut ajax_spider_timeout = preference_definitions()
+            .iter()
+            .find(|p| p.id == AJAX_SPIDER_TIMEOUT_PREFERENCE_ID)
+            .map(|p| p.default_value.to_string())
+            .unwrap_or_else(|| "0".to_string());
+
+        let mut unknown_preferences: Vec<ScannerPreference> = Vec::new();
+
+        for pref in scan_preferences {
+            let value = pref.value.trim().to_string();
+            match pref.id.as_str() {
+                SCAN_MODE_PREFERENCE_ID => {
+                    if value != "safe" && value != "active" {
+                        return Err(ScanServiceError::InvalidPreference {
+                            id: pref.id,
+                            value,
+                            reason: "allowed values are 'safe' and 'active'".to_string(),
+                        });
+                    }
+                    scan_mode = value;
+                }
+                AJAX_SPIDER_TIMEOUT_PREFERENCE_ID => {
+                    let parsed = value.parse::<i64>().map_err(|_| {
+                        ScanServiceError::InvalidPreference {
+                            id: pref.id.clone(),
+                            value: value.clone(),
+                            reason:
+                                "value must be a non-negative integer in seconds (0 means unlimited)"
+                                    .to_string(),
+                        }
+                    })?;
+                    if parsed < 0 {
+                        return Err(ScanServiceError::InvalidPreference {
+                            id: pref.id,
+                            value,
+                            reason:
+                                "value must be a non-negative integer in seconds (0 means unlimited)"
+                                    .to_string(),
+                        });
+                    }
+                    ajax_spider_timeout = parsed.to_string();
+                }
+                _ => {
+                    warn!(
+                        preference_id = %pref.id,
+                        "unknown scan preference accepted and forwarded"
+                    );
+                    unknown_preferences.push(ScannerPreference {
+                        id: pref.id,
+                        value,
+                    });
+                }
+            }
+        }
+
+        let mut resolved = vec![
+            ScannerPreference {
+                id: SCAN_MODE_PREFERENCE_ID.to_string(),
+                value: scan_mode,
+            },
+            ScannerPreference {
+                id: AJAX_SPIDER_TIMEOUT_PREFERENCE_ID.to_string(),
+                value: ajax_spider_timeout,
+            },
+        ];
+        resolved.extend(unknown_preferences);
+        Ok(resolved)
+    }
 }
 
 #[async_trait]
@@ -112,11 +216,12 @@ impl ScanService for DefaultScanService {
     }
 
     async fn get_default_preferences(&self) -> Result<PreferencesResponse, ScanServiceError> {
-        Ok(PreferencesResponse::default())
+        Ok(Self::default_preferences_response())
     }
 
     async fn create_scan(&self, request: CreateScanRequest) -> Result<String, ScanServiceError> {
         let validated_hosts = validate_target_urls(&request.target.hosts)?;
+        let resolved_scan_preferences = Self::resolve_scan_preferences(request.scan_preferences)?;
         let id = request
             .scan_id
             .unwrap_or_else(|| Uuid::new_v4().to_string());
@@ -126,7 +231,7 @@ impl ScanService for DefaultScanService {
                 hosts: validated_hosts,
                 ..request.target
             },
-            scan_preferences: request.scan_preferences,
+            scan_preferences: resolved_scan_preferences,
             vts: request.vts,
             status: ScanStatus::Stored,
             stop_requested: false,

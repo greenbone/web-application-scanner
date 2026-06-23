@@ -26,6 +26,14 @@ pub enum ScanServiceError {
     #[error("invalid target url '{value}': {reason}")]
     InvalidUrl { value: String, reason: String },
 
+    /// Scanner preference failed validation.
+    #[error("invalid scanner preference '{id}' with value '{value}': {reason}")]
+    InvalidPreference {
+        id: String,
+        value: String,
+        reason: String,
+    },
+
     /// Storage backend failure.
     #[error(transparent)]
     Storage(#[from] StorageError),

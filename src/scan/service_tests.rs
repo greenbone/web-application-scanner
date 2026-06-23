@@ -5,7 +5,7 @@
 use tracing_test::traced_test;
 
 use crate::{
-    api::dto::scans::{ResultType, Target},
+    api::dto::scans::{PreferencesResponse, ResultType, ScannerPreference, Target},
     scan::{CreateScanRequest, DefaultScanService, ScanService, ScanServiceError, ScanStatus},
     storage::{ResultRecord, ScanRecord, StorageError, test_support::temporary_sqlite_storage},
 };
@@ -333,5 +333,131 @@ async fn create_scan_with_duplicate_id_returns_already_exists_error() {
     assert!(matches!(
         err,
         ScanServiceError::Storage(StorageError::AlreadyExists(id)) if id == "existing-id"
+    ));
+}
+
+#[tokio::test]
+async fn get_default_preferences_returns_scan_mode_and_ajax_spider_timeout() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage);
+
+    let response = service.get_default_preferences().await.unwrap();
+
+    let PreferencesResponse(preferences) = response;
+    assert!(preferences.iter().any(|p| {
+        p.id == "scan_mode"
+            && p.preference_type == "enum"
+            && p.default_value == "safe"
+            && p.values.as_deref() == Some("safe;active")
+    }));
+    assert!(preferences.iter().any(|p| {
+        p.id == "ajax_spider_timeout"
+            && p.preference_type == "integer"
+            && p.default_value == "0"
+            && p.values.is_none()
+    }));
+}
+
+#[tokio::test]
+async fn create_scan_persists_effective_defaults_when_no_preferences_given() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage.clone());
+
+    let scan_id = service.create_scan(make_request()).await.unwrap();
+    let persisted = storage.get_scan(&scan_id).await.unwrap();
+
+    assert!(persisted
+        .scan_preferences
+        .iter()
+        .any(|p| p.id == "scan_mode" && p.value == "safe"));
+    assert!(persisted
+        .scan_preferences
+        .iter()
+        .any(|p| p.id == "ajax_spider_timeout" && p.value == "0"));
+}
+
+#[tokio::test]
+async fn create_scan_persists_known_preference_overrides() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage.clone());
+    let mut request = make_request();
+    request.scan_preferences = vec![
+        ScannerPreference {
+            id: "scan_mode".to_string(),
+            value: "active".to_string(),
+        },
+        ScannerPreference {
+            id: "ajax_spider_timeout".to_string(),
+            value: "42".to_string(),
+        },
+    ];
+
+    let scan_id = service.create_scan(request).await.unwrap();
+    let persisted = storage.get_scan(&scan_id).await.unwrap();
+
+    assert!(persisted
+        .scan_preferences
+        .iter()
+        .any(|p| p.id == "scan_mode" && p.value == "active"));
+    assert!(persisted
+        .scan_preferences
+        .iter()
+        .any(|p| p.id == "ajax_spider_timeout" && p.value == "42"));
+}
+
+#[traced_test]
+#[tokio::test]
+async fn create_scan_allows_unknown_preference_and_logs_warning() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage.clone());
+    let mut request = make_request();
+    request.scan_preferences = vec![ScannerPreference {
+        id: "unknown_pref".to_string(),
+        value: "abc".to_string(),
+    }];
+
+    let scan_id = service.create_scan(request).await.unwrap();
+    let persisted = storage.get_scan(&scan_id).await.unwrap();
+
+    assert!(persisted
+        .scan_preferences
+        .iter()
+        .any(|p| p.id == "unknown_pref" && p.value == "abc"));
+    assert!(logs_contain("unknown scan preference accepted and forwarded"));
+}
+
+#[tokio::test]
+async fn create_scan_rejects_invalid_scan_mode_value() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage);
+    let mut request = make_request();
+    request.scan_preferences = vec![ScannerPreference {
+        id: "scan_mode".to_string(),
+        value: "turbo".to_string(),
+    }];
+
+    let err = service.create_scan(request).await.unwrap_err();
+
+    assert!(matches!(
+        err,
+        ScanServiceError::InvalidPreference { ref id, .. } if id == "scan_mode"
+    ));
+}
+
+#[tokio::test]
+async fn create_scan_rejects_negative_ajax_spider_timeout() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let service = DefaultScanService::new_storage_only(storage);
+    let mut request = make_request();
+    request.scan_preferences = vec![ScannerPreference {
+        id: "ajax_spider_timeout".to_string(),
+        value: "-1".to_string(),
+    }];
+
+    let err = service.create_scan(request).await.unwrap_err();
+
+    assert!(matches!(
+        err,
+        ScanServiceError::InvalidPreference { ref id, .. } if id == "ajax_spider_timeout"
     ));
 }

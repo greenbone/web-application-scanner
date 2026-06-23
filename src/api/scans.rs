@@ -55,6 +55,7 @@ fn scan_service_err(e: ScanServiceError) -> Response {
         ScanServiceError::InvalidTransition { .. } => StatusCode::NOT_ACCEPTABLE.into_response(),
         ScanServiceError::ScanNotFound(_) => StatusCode::NOT_FOUND.into_response(),
         ScanServiceError::InvalidUrl { .. } => StatusCode::BAD_REQUEST.into_response(),
+        ScanServiceError::InvalidPreference { .. } => StatusCode::BAD_REQUEST.into_response(),
         ScanServiceError::Storage(storage_error) => storage_err(storage_error),
         ScanServiceError::ZapClient(zap_error) => {
             tracing::error!("scan service zap client error: {}", zap_error);
