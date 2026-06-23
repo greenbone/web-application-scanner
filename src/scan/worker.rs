@@ -18,7 +18,8 @@ use crate::{
     api::dto::scans::ResultType,
     scan::{
         RetryingScanStateCoordinator, Scan, ScanProgress, ScanResult, ScanStateCoordinator,
-        ScanStatus, observability::emit_queue_wait_telemetry, queue::ScanQueue, retry::IsTransient,
+        ScanStatus, observability::emit_queue_wait_telemetry,
+        preferences::{SCAN_MODE_PREFERENCE_ID, ScanMode}, queue::ScanQueue, retry::IsTransient,
     },
     storage::{StorageError, StorageHandle},
     zapclient::ajaxspider::AjaxSpiderStatus,
@@ -161,6 +162,18 @@ struct ScanWorker {
 }
 
 impl ScanWorker {
+    fn resolve_scan_mode(scan: &Scan) -> ScanMode {
+        scan.scan_preferences
+            .iter()
+            .find(|pref| pref.id == SCAN_MODE_PREFERENCE_ID)
+            .and_then(|pref| match pref.value.as_str() {
+                "safe" => Some(ScanMode::Safe),
+                "active" => Some(ScanMode::Active),
+                _ => None,
+            })
+            .unwrap_or_else(ScanMode::default_mode)
+    }
+
     async fn run(self) {
         loop {
             let scan_id = self.queue.dequeue().await;
@@ -208,6 +221,7 @@ impl ScanWorker {
 
     async fn execute_scan(&self, scan: &Scan) -> Result<(), WorkerError> {
         let mut progress = ScanProgress::new(&scan.target.hosts);
+        let scan_mode = Self::resolve_scan_mode(scan);
 
         {
             let pv = progress.as_value();
@@ -254,6 +268,23 @@ impl ScanWorker {
             }
 
             progress.mark_spider_done(index);
+
+            if scan_mode == ScanMode::Safe {
+                debug!(
+                    scan_id = scan.id,
+                    target,
+                    "active scan skipped due to scan_mode=safe"
+                );
+                progress.mark_active_scan_done(index);
+                {
+                    let pv = progress.as_value();
+                    self.scan_state.update_progress(&scan.id, Some(pv)).await?;
+                }
+                self.poll_and_persist_alerts(&scan.id, &context_name, Some(target.as_str()))
+                    .await?;
+                continue;
+            }
+
             progress.mark_active_scan_running(index);
             {
                 let pv = progress.as_value();
