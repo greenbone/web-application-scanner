@@ -170,9 +170,13 @@ If the scan is failed there should be an attempt to stop any spider or active sc
 
 Once the context is set up, the worker runs the AJAX spider for each target URL and updates the progress. The AJAX spider timeout is taken from the preferences passed to `create_scan`.
 
-After the spider is finished, the worker runs active scans against the target URLs, updating the progress. The active scan timeout is likewise taken from the `create_scan` preferences.
+Before each AJAX spider run, the worker sets the ZAP AJAX spider max-duration option (`ajaxSpider/setOptionMaxDuration`) using the effective `ajax_spider_timeout` value.
 
-If either the AJAX spider or active scan times out, a warning is logged and an error result is added to the storage. 
+If `ajax_spider_timeout` is omitted, the default timeout is 3600 seconds (60 minutes). If it is set to `0`, the timeout is treated as unlimited.
+
+After the spider is finished, the worker either runs the active scan stage (`scan_mode=active`) or skips it (`scan_mode=safe`).
+
+After active-scan completion (or immediately after spider in safe mode), the worker enters a temporary passive-scan placeholder stage for progress tracking and marks it done after a short fixed wait.
 
 Alert polling and context operations do not have dedicated timeouts; transient failures are handled by the general retry mechanism.
 
@@ -258,12 +262,12 @@ If all worker slots are occupied, additional started scans remain in `requested`
 ## Progress model
 
 Progress is represented internally using the per-target variables:
-- A state enum (`pending`, `running`, `done`) for each stage of the scan (`spider`, `active_scan`).
-- The last ZAP state for each stage (`running` or `stopped` for spider, a percentage for active scan).
+- A state enum (`pending`, `running`, `done`) for each stage of the scan (`spider`, `active_scan`, `passive_scan`).
+- The last ZAP state for spider (`running` or `stopped`) and percentages for active and passive scan.
 - A per-host progress percentage calculated as follows:
 	- if the spider stage is not started yet, `progress = 0`
 	- if the spider stage is started but not finished yet, `progress = 1`
-	- once the spider stage is finished, `progress = floor(25 + 0.75 * active_scan_percentage)`
+	- once the spider stage is finished, `progress = floor(25 + 0.7 * active_scan_percentage + 0.05 * passive_scan_percentage)`
 
 For the HTTP API representation, progress is exposed as `host_info`:
 - `all`: total number of hosts in the scan target scope.
@@ -308,6 +312,7 @@ In-memory SQLite is reserved for the storage module's own unit tests. Those stor
 - Error paths that result in `failed` status.
 - Startup recovery: non-terminal scans are set to `failed` on service restart.
 - Alert-to-result mapping, including `Informational -> log`, all other alert risk levels -> `alarm`, URL-derived host and port extraction, and invalid alert URL fallback behavior.
+- Preference-driven worker behavior, including `scan_mode=safe` active-stage skip, AJAX spider timeout option updates (including `0` for unlimited and default `3600` seconds), and passive-scan progress stage transitions.
 
 ## Notes and open questions
 

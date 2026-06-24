@@ -155,7 +155,11 @@ impl RetryingZapClient {
             "zap.set_ajax_spider_max_duration",
             move || {
                 let inner = inner.clone();
-                async move { inner.set_ajax_spider_max_duration(max_duration_seconds).await }
+                async move {
+                    inner
+                        .set_ajax_spider_max_duration(max_duration_seconds)
+                        .await
+                }
             },
             self.max_retries,
             self.max_delay,

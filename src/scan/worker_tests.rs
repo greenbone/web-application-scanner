@@ -425,6 +425,89 @@ async fn mock_zap_server_for_unlimited_ajax_spider_timeout() -> MockServer {
     server
 }
 
+async fn mock_zap_server_for_default_ajax_spider_timeout() -> MockServer {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .and(body_string_contains("Integer=3600"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    server
+}
+
 async fn mock_zap_server_with_active_status_error() -> MockServer {
     let server = MockServer::start().await;
 
@@ -1094,6 +1177,38 @@ async fn runtime_treats_zero_ajax_spider_timeout_as_unlimited() {
 }
 
 #[tokio::test]
+async fn runtime_applies_default_ajax_spider_timeout_when_preference_is_omitted() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_default_ajax_spider_timeout().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_safe_mode_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Succeeded);
+}
+
+#[tokio::test]
 async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server_with_active_status_error().await;
@@ -1276,8 +1391,8 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
 }
 
 #[tokio::test]
-async fn runtime_stop_running_scan_in_passive_stage_transitions_to_stopped_and_clears_stop_requested(
-) {
+async fn runtime_stop_running_scan_in_passive_stage_transitions_to_stopped_and_clears_stop_requested()
+ {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
     let server = mock_zap_server().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();

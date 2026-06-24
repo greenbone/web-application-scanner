@@ -18,7 +18,8 @@ use crate::{
     api::dto::scans::ResultType,
     scan::{
         RetryingScanStateCoordinator, Scan, ScanProgress, ScanResult, ScanStateCoordinator,
-        ScanStatus, observability::emit_queue_wait_telemetry,
+        ScanStatus,
+        observability::emit_queue_wait_telemetry,
         preferences::{AJAX_SPIDER_TIMEOUT_PREFERENCE_ID, SCAN_MODE_PREFERENCE_ID, ScanMode},
         queue::ScanQueue,
         retry::IsTransient,
@@ -188,8 +189,7 @@ impl ScanWorker {
     }
 
     fn resolve_ajax_spider_timeout_seconds(scan: &Scan) -> u64 {
-        scan
-            .scan_preferences
+        scan.scan_preferences
             .iter()
             .find(|pref| pref.id == AJAX_SPIDER_TIMEOUT_PREFERENCE_ID)
             .and_then(|pref| pref.value.parse::<u64>().ok())
@@ -350,7 +350,8 @@ impl ScanWorker {
         context_name: &str,
     ) -> Result<ScanExecutionControl, WorkerError> {
         if self.stop_requested(scan_id).await? {
-            self.complete_stop_request(scan_id, Some(context_name)).await?;
+            self.complete_stop_request(scan_id, Some(context_name))
+                .await?;
             return Ok(ScanExecutionControl::StopExecution);
         }
         Ok(ScanExecutionControl::Continue)
@@ -403,11 +404,7 @@ impl ScanWorker {
         index: usize,
         progress: &mut ScanProgress,
     ) -> Result<(), WorkerError> {
-        debug!(
-            scan_id,
-            target,
-            "active scan skipped due to scan_mode=safe"
-        );
+        debug!(scan_id, target, "active scan skipped due to scan_mode=safe");
         progress.mark_active_scan_done(index);
         self.persist_progress(scan_id, progress).await?;
         self.poll_and_persist_alerts(scan_id, context_name, Some(target))

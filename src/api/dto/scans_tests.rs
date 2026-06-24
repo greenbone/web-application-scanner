@@ -248,14 +248,17 @@ fn preferences_response_round_trips_as_array_payload() {
     }]);
 
     let json = serde_json::to_value(&payload).expect("preferences response should serialize");
-    assert!(json.is_array(), "preferences response must serialize as array");
+    assert!(
+        json.is_array(),
+        "preferences response must serialize as array"
+    );
     assert_eq!(json[0]["id"], "scan_mode");
     assert_eq!(json[0]["type"], "enum");
     assert_eq!(json[0]["default"], "safe");
     assert_eq!(json[0]["values"], "safe;active");
 
-    let decoded =
-        serde_json::from_value::<PreferencesResponse>(json).expect("preferences should deserialize");
+    let decoded = serde_json::from_value::<PreferencesResponse>(json)
+        .expect("preferences should deserialize");
     assert_eq!(decoded, payload);
 }
 

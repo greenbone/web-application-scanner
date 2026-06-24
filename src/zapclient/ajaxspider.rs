@@ -95,12 +95,7 @@ impl ZapClient {
             ("apikey".to_string(), self.api_key.clone()),
             ("Integer".to_string(), max_duration_seconds.to_string()),
         ];
-        let response = self
-            .http_client
-            .post(endpoint)
-            .form(&form)
-            .send()
-            .await?;
+        let response = self.http_client.post(endpoint).form(&form).send().await?;
 
         let status = response.status();
         let body = response.text().await?;
@@ -109,7 +104,8 @@ impl ZapClient {
             return Err(ZapClientError::UnexpectedStatus { status, body });
         }
 
-        let parsed_response = serde_json::from_str::<AjaxSpiderSetOptionMaxDurationResponse>(&body)?;
+        let parsed_response =
+            serde_json::from_str::<AjaxSpiderSetOptionMaxDurationResponse>(&body)?;
         if parsed_response.status != "OK" {
             return Err(ZapClientError::UnexpectedContent {
                 field: "Result".to_string(),
