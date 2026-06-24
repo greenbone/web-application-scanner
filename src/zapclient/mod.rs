@@ -144,6 +144,25 @@ impl RetryingZapClient {
         .await
     }
 
+    /// Set the global AJAX spider max duration option in seconds.
+    pub async fn set_ajax_spider_max_duration(
+        &self,
+        max_duration_seconds: u64,
+    ) -> Result<(), ZapClientError> {
+        let inner = self.inner.clone();
+
+        crate::scan::retry::with_retry(
+            "zap.set_ajax_spider_max_duration",
+            move || {
+                let inner = inner.clone();
+                async move { inner.set_ajax_spider_max_duration(max_duration_seconds).await }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
     /// Get the current status of the AJAX spider.
     pub async fn get_ajax_spider_status(
         &self,
