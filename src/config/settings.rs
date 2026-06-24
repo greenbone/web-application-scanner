@@ -42,6 +42,9 @@ pub const DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS: u64 = 300;
 /// Default grace period added to scan-level AJAX spider timeout before forcing a stop request.
 pub const DEFAULT_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS: u64 = 60;
 
+/// Default time limit for waiting on phase status changes after stop requests.
+pub const DEFAULT_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS: u64 = 60;
+
 /// Default maximum number of retry attempts for transient failures.
 pub const DEFAULT_SCAN_RETRY_MAX_RETRIES: u32 = 10;
 
@@ -82,6 +85,8 @@ pub struct Settings {
     pub scan_stop_grace_period_seconds: u64,
     /// Grace period in seconds added to scan-level AJAX spider timeout before issuing a stop.
     pub scan_ajax_spider_timeout_grace_period_seconds: u64,
+    /// Time limit in seconds for waiting on scan phase status changes after stop requests.
+    pub scan_phase_stop_status_change_timeout_seconds: u64,
     /// Maximum number of retry attempts for transient ZAP or storage failures.
     pub scan_retry_max_retries: u32,
     /// Maximum backoff delay between retry attempts, in seconds.
@@ -102,6 +107,7 @@ struct RawSettings {
     scan_alert_poll_interval_seconds: u64,
     scan_stop_grace_period_seconds: u64,
     scan_ajax_spider_timeout_grace_period_seconds: u64,
+    scan_phase_stop_status_change_timeout_seconds: u64,
     scan_retry_max_retries: u32,
     scan_retry_max_delay_seconds: u64,
 }
@@ -146,6 +152,10 @@ impl Settings {
                 DEFAULT_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS,
             )?
             .set_default(
+                "scan_phase_stop_status_change_timeout_seconds",
+                DEFAULT_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS,
+            )?
+            .set_default(
                 "scan_retry_max_retries",
                 DEFAULT_SCAN_RETRY_MAX_RETRIES as i64,
             )?
@@ -178,6 +188,12 @@ impl Settings {
         if raw.scan_stop_grace_period_seconds == 0 {
             return Err(ConfigError::Message(
                 "scan_stop_grace_period_seconds must be greater than 0".to_string(),
+            ));
+        }
+
+        if raw.scan_phase_stop_status_change_timeout_seconds == 0 {
+            return Err(ConfigError::Message(
+                "scan_phase_stop_status_change_timeout_seconds must be greater than 0".to_string(),
             ));
         }
 
@@ -227,6 +243,8 @@ impl Settings {
             scan_stop_grace_period_seconds: raw.scan_stop_grace_period_seconds,
             scan_ajax_spider_timeout_grace_period_seconds: raw
                 .scan_ajax_spider_timeout_grace_period_seconds,
+            scan_phase_stop_status_change_timeout_seconds: raw
+                .scan_phase_stop_status_change_timeout_seconds,
             scan_retry_max_retries: raw.scan_retry_max_retries,
             scan_retry_max_delay_seconds: raw.scan_retry_max_delay_seconds,
         })

@@ -22,6 +22,7 @@ fn clear_env() {
         env::remove_var("GREENBONE_WAS_SCAN_ALERT_POLL_INTERVAL_SECONDS");
         env::remove_var("GREENBONE_WAS_SCAN_STOP_GRACE_PERIOD_SECONDS");
         env::remove_var("GREENBONE_WAS_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS");
+        env::remove_var("GREENBONE_WAS_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS");
         env::remove_var("GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES");
         env::remove_var("GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS");
     }
@@ -62,6 +63,10 @@ fn test_uses_defaults_when_env_is_unset() {
         settings::DEFAULT_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS
     );
     assert_eq!(
+        settings.scan_phase_stop_status_change_timeout_seconds,
+        settings::DEFAULT_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS
+    );
+    assert_eq!(
         settings.scan_retry_max_retries,
         settings::DEFAULT_SCAN_RETRY_MAX_RETRIES
     );
@@ -91,6 +96,10 @@ fn test_uses_env_overrides_when_set() {
             "GREENBONE_WAS_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS",
             "45",
         );
+        env::set_var(
+            "GREENBONE_WAS_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS",
+            "33",
+        );
         env::set_var("GREENBONE_WAS_SCAN_RETRY_MAX_RETRIES", "7");
         env::set_var("GREENBONE_WAS_SCAN_RETRY_MAX_DELAY_SECONDS", "45");
     };
@@ -109,6 +118,7 @@ fn test_uses_env_overrides_when_set() {
     assert_eq!(settings.scan_alert_poll_interval_seconds, 15);
     assert_eq!(settings.scan_stop_grace_period_seconds, 120);
     assert_eq!(settings.scan_ajax_spider_timeout_grace_period_seconds, 45);
+    assert_eq!(settings.scan_phase_stop_status_change_timeout_seconds, 33);
     assert_eq!(settings.scan_retry_max_retries, 7);
     assert_eq!(settings.scan_retry_max_delay_seconds, 45);
 }
@@ -300,4 +310,24 @@ fn test_zero_scan_stop_grace_period_is_error() {
     assert!(result.is_err());
     let err = result.err().unwrap();
     assert!(err.to_string().contains("scan_stop_grace_period_seconds"));
+}
+
+#[test]
+#[serial]
+fn test_zero_scan_phase_stop_status_change_timeout_is_error() {
+    clear_env();
+    unsafe {
+        env::set_var(
+            "GREENBONE_WAS_SCAN_PHASE_STOP_STATUS_CHANGE_TIMEOUT_SECONDS",
+            "0",
+        );
+    }
+
+    let result = Settings::load();
+    assert!(result.is_err());
+    let err = result.err().unwrap();
+    assert!(
+        err.to_string()
+            .contains("scan_phase_stop_status_change_timeout_seconds")
+    );
 }
