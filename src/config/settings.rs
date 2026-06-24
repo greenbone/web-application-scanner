@@ -39,6 +39,9 @@ pub const DEFAULT_SCAN_ALERT_POLL_INTERVAL_SECONDS: u64 = 10;
 /// Default stop grace period in seconds.
 pub const DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS: u64 = 300;
 
+/// Default grace period added to scan-level AJAX spider timeout before forcing a stop request.
+pub const DEFAULT_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS: u64 = 60;
+
 /// Default maximum number of retry attempts for transient failures.
 pub const DEFAULT_SCAN_RETRY_MAX_RETRIES: u32 = 10;
 
@@ -77,6 +80,8 @@ pub struct Settings {
     pub scan_alert_poll_interval_seconds: u64,
     /// Grace period in seconds to wait for running scans to stop before forcing failure.
     pub scan_stop_grace_period_seconds: u64,
+    /// Grace period in seconds added to scan-level AJAX spider timeout before issuing a stop.
+    pub scan_ajax_spider_timeout_grace_period_seconds: u64,
     /// Maximum number of retry attempts for transient ZAP or storage failures.
     pub scan_retry_max_retries: u32,
     /// Maximum backoff delay between retry attempts, in seconds.
@@ -96,6 +101,7 @@ struct RawSettings {
     scan_worker_count: usize,
     scan_alert_poll_interval_seconds: u64,
     scan_stop_grace_period_seconds: u64,
+    scan_ajax_spider_timeout_grace_period_seconds: u64,
     scan_retry_max_retries: u32,
     scan_retry_max_delay_seconds: u64,
 }
@@ -134,6 +140,10 @@ impl Settings {
             .set_default(
                 "scan_stop_grace_period_seconds",
                 DEFAULT_SCAN_STOP_GRACE_PERIOD_SECONDS,
+            )?
+            .set_default(
+                "scan_ajax_spider_timeout_grace_period_seconds",
+                DEFAULT_SCAN_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD_SECONDS,
             )?
             .set_default(
                 "scan_retry_max_retries",
@@ -215,6 +225,8 @@ impl Settings {
             scan_worker_count: raw.scan_worker_count,
             scan_alert_poll_interval_seconds: raw.scan_alert_poll_interval_seconds,
             scan_stop_grace_period_seconds: raw.scan_stop_grace_period_seconds,
+            scan_ajax_spider_timeout_grace_period_seconds: raw
+                .scan_ajax_spider_timeout_grace_period_seconds,
             scan_retry_max_retries: raw.scan_retry_max_retries,
             scan_retry_max_delay_seconds: raw.scan_retry_max_delay_seconds,
         })
