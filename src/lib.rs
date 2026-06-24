@@ -66,6 +66,9 @@ pub async fn run() -> Result<(), AppError> {
             stop_grace_period: std::time::Duration::from_secs(
                 settings.scan_stop_grace_period_seconds,
             ),
+            ajax_spider_timeout_grace_period: std::time::Duration::from_secs(
+                settings.scan_ajax_spider_timeout_grace_period_seconds,
+            ),
             retry_max_retries: settings.scan_retry_max_retries,
             retry_max_delay: std::time::Duration::from_secs(settings.scan_retry_max_delay_seconds),
             ..ScanRuntimeConfig::default()
