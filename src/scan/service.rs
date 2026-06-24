@@ -183,10 +183,7 @@ impl DefaultScanService {
                         preference_id = %pref.id,
                         "unknown scan preference accepted and forwarded"
                     );
-                    unknown_preferences.push(ScannerPreference {
-                        id: pref.id,
-                        value,
-                    });
+                    unknown_preferences.push(ScannerPreference { id: pref.id, value });
                 }
             }
         }

@@ -28,7 +28,7 @@ This plan adds scanner preference support to the scan service and aligns the pub
 
 ## Phase 1: Preference Registry and Defaults
 
-Status: Planned
+Status: Implemented
 
 Add a scan-owned preference registry that defines the supported scanner preferences.
 
@@ -40,7 +40,7 @@ Add a scan-owned preference registry that defines the supported scanner preferen
 
 ## Phase 2: API Contract Alignment
 
-Status: Planned
+Status: Implemented
 
 Update the API DTOs and OpenAPI wiring early so the public contract is stable before service behavior is finalized.
 
@@ -50,7 +50,7 @@ Update the API DTOs and OpenAPI wiring early so the public contract is stable be
 
 ## Phase 3: Scan Service Integration
 
-Status: Planned
+Status: Implemented
 
 Teach the scan service to implement the phase-2 API contract for defaults and scan creation.
 
@@ -65,7 +65,7 @@ Teach the scan service to implement the phase-2 API contract for defaults and sc
 
 ## Phase 4: Scan Mode Behavior
 
-Status: Planned
+Status: Implemented
 
 Implement mode-driven active-scan behavior using `scan_mode` in scan preferences.
 
@@ -78,7 +78,7 @@ Implement mode-driven active-scan behavior using `scan_mode` in scan preferences
 
 ## Phase 5: Passive Scan Progress Stage
 
-Status: Planned
+Status: Implemented
 
 Add a passive-scan target progress stage that follows active scan (or follows spider directly when `scan_mode=safe`) and contributes to overall percentage.
 
@@ -93,7 +93,7 @@ Add a passive-scan target progress stage that follows active scan (or follows sp
 
 ## Phase 6: AJAX Spider Limit Enforcement
 
-Status: Planned
+Status: Implemented
 
 Implement runtime enforcement of the scan-level AJAX spider limit with per-target timers.
 
@@ -112,7 +112,7 @@ Implement runtime enforcement of the scan-level AJAX spider limit with per-targe
 
 ## Phase 7: Tests and Documentation
 
-Status: Planned
+Status: Implemented
 
 Add focused coverage for the new preference behavior and update any stale scan-module docs.
 

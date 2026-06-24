@@ -366,14 +366,18 @@ async fn create_scan_persists_effective_defaults_when_no_preferences_given() {
     let scan_id = service.create_scan(make_request()).await.unwrap();
     let persisted = storage.get_scan(&scan_id).await.unwrap();
 
-    assert!(persisted
-        .scan_preferences
-        .iter()
-        .any(|p| p.id == "scan_mode" && p.value == "safe"));
-    assert!(persisted
-        .scan_preferences
-        .iter()
-        .any(|p| p.id == "ajax_spider_timeout" && p.value == "3600"));
+    assert!(
+        persisted
+            .scan_preferences
+            .iter()
+            .any(|p| p.id == "scan_mode" && p.value == "safe")
+    );
+    assert!(
+        persisted
+            .scan_preferences
+            .iter()
+            .any(|p| p.id == "ajax_spider_timeout" && p.value == "3600")
+    );
 }
 
 #[tokio::test]
@@ -395,14 +399,18 @@ async fn create_scan_persists_known_preference_overrides() {
     let scan_id = service.create_scan(request).await.unwrap();
     let persisted = storage.get_scan(&scan_id).await.unwrap();
 
-    assert!(persisted
-        .scan_preferences
-        .iter()
-        .any(|p| p.id == "scan_mode" && p.value == "active"));
-    assert!(persisted
-        .scan_preferences
-        .iter()
-        .any(|p| p.id == "ajax_spider_timeout" && p.value == "42"));
+    assert!(
+        persisted
+            .scan_preferences
+            .iter()
+            .any(|p| p.id == "scan_mode" && p.value == "active")
+    );
+    assert!(
+        persisted
+            .scan_preferences
+            .iter()
+            .any(|p| p.id == "ajax_spider_timeout" && p.value == "42")
+    );
 }
 
 #[traced_test]
@@ -419,11 +427,15 @@ async fn create_scan_allows_unknown_preference_and_logs_warning() {
     let scan_id = service.create_scan(request).await.unwrap();
     let persisted = storage.get_scan(&scan_id).await.unwrap();
 
-    assert!(persisted
-        .scan_preferences
-        .iter()
-        .any(|p| p.id == "unknown_pref" && p.value == "abc"));
-    assert!(logs_contain("unknown scan preference accepted and forwarded"));
+    assert!(
+        persisted
+            .scan_preferences
+            .iter()
+            .any(|p| p.id == "unknown_pref" && p.value == "abc")
+    );
+    assert!(logs_contain(
+        "unknown scan preference accepted and forwarded"
+    ));
 }
 
 #[tokio::test]
