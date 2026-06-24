@@ -88,9 +88,9 @@ pub const AJAX_SPIDER_TIMEOUT_PREFERENCE: ScannerPreferenceDefinition =
     ScannerPreferenceDefinition {
         id: AJAX_SPIDER_TIMEOUT_PREFERENCE_ID,
         name: "AJAX Spider Timeout",
-        description: "Scan-level AJAX spider timeout in seconds; enforced per target. Value 0 means unlimited.",
+        description: "Scan-level AJAX spider timeout in seconds; value 0 means unlimited. Default is 3600 seconds (60 minutes).",
         value_type: PreferenceValueType::Integer,
-        default_value: "0",
+        default_value: "3600",
         allowed_values: &[],
     };
 

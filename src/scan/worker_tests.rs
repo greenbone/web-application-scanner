@@ -52,6 +52,38 @@ fn make_safe_mode_request(host: &str) -> CreateScanRequest {
     }
 }
 
+fn make_safe_mode_request_with_ajax_timeout(host: &str, timeout_seconds: u64) -> CreateScanRequest {
+    CreateScanRequest {
+        scan_id: None,
+        target: Target {
+            hosts: vec![host.to_string()],
+            excluded_hosts: vec![],
+            credentials: vec![],
+        },
+        scan_preferences: vec![
+            ScannerPreference {
+                id: "scan_mode".to_string(),
+                value: "safe".to_string(),
+            },
+            ScannerPreference {
+                id: "ajax_spider_timeout".to_string(),
+                value: timeout_seconds.to_string(),
+            },
+        ],
+        vts: vec![],
+    }
+}
+
+async fn mount_ajax_spider_set_option_max_duration_ok(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(server)
+        .await;
+}
+
 async fn mock_zap_server() -> MockServer {
     let server = MockServer::start().await;
 
@@ -70,6 +102,8 @@ async fn mock_zap_server() -> MockServer {
         )
         .mount(&server)
         .await;
+
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
@@ -152,6 +186,8 @@ async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer 
         .mount(&server)
         .await;
 
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
         .respond_with(
@@ -165,6 +201,190 @@ async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer 
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
         )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    server
+}
+
+async fn mock_zap_server_for_ajax_spider_timeout_enforcement() -> MockServer {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .and(body_string_contains("Integer=1"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
+        )
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    server
+}
+
+async fn mock_zap_server_for_unlimited_ajax_spider_timeout() -> MockServer {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .and(body_string_contains("Integer=0"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+        )
+        .mount(&server)
+        .await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(0)
         .mount(&server)
         .await;
 
@@ -223,6 +443,8 @@ async fn mock_zap_server_with_active_status_error() -> MockServer {
         )
         .mount(&server)
         .await;
+
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
@@ -285,6 +507,8 @@ async fn mock_zap_server_with_remove_context_error() -> MockServer {
         )
         .mount(&server)
         .await;
+
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
@@ -367,6 +591,8 @@ async fn mock_zap_server_for_running_stop_in_active_scan() -> MockServer {
         .mount(&server)
         .await;
 
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
         .respond_with(
@@ -446,6 +672,8 @@ async fn mock_zap_server_for_running_stop_in_spider() -> MockServer {
         .mount(&server)
         .await;
 
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
         .respond_with(
@@ -508,6 +736,8 @@ async fn mock_zap_server_for_running_stop_in_active_stage_with_stop_failure() ->
         )
         .mount(&server)
         .await;
+
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
@@ -587,6 +817,8 @@ async fn mock_zap_server_for_forced_stop_timeout() -> MockServer {
         )
         .mount(&server)
         .await;
+
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
 
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
@@ -788,6 +1020,77 @@ async fn runtime_skips_active_scan_when_scan_mode_is_safe() {
     let scan = storage.get_scan(&scan_id).await.unwrap();
     assert_eq!(scan.status, ScanStatus::Succeeded);
     assert!(logs_contain("active scan skipped due to scan_mode=safe"));
+}
+
+#[traced_test]
+#[tokio::test]
+async fn runtime_sets_ajax_spider_timeout_option_and_continues_scan_flow() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_ajax_spider_timeout_enforcement().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_safe_mode_request_with_ajax_timeout(
+            "https://example.test",
+            1,
+        ))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Succeeded);
+}
+
+#[tokio::test]
+async fn runtime_treats_zero_ajax_spider_timeout_as_unlimited() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_unlimited_ajax_spider_timeout().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_safe_mode_request_with_ajax_timeout(
+            "https://example.test",
+            0,
+        ))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    assert_eq!(scan.status, ScanStatus::Succeeded);
 }
 
 #[tokio::test]

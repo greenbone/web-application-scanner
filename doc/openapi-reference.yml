@@ -1114,7 +1114,7 @@ components:
             "id": "ajax_spider_timeout",
             "type": "integer",
             "name": "AJAX Spider Timeout",
-            "default": "0",
+            "default": "3600",
             "description": "Scan-level AJAX spider timeout in seconds, applied per target. Value 0 means unlimited.",
           },
         ]

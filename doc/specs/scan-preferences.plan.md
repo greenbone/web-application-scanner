@@ -149,3 +149,8 @@ Add focused coverage for the new preference behavior and update any stale scan-m
 - Treat the AJAX spider time limit as a scan-level seconds value and enforce it independently for each target in the scan.
 - Treat `ajax_spider_timeout=0` as unlimited.
 - Introduce passive-scan progress as a temporary 5-second per-target placeholder stage after active scan (or after spider when `scan_mode=safe`). Full handling of the passive scan is out of scope for this plan.
+
+## Noted Deviations
+
+- Deviation from Phase 6 local enforcement: the worker no longer stops AJAX spider scans locally when timeout is exceeded. Instead, it sets the ZAP AJAX spider option (`ajaxSpider/setOptionMaxDuration`) before each spider run and relies on ZAP-side timeout behavior.
+- Deviation from original default timeout: the default `ajax_spider_timeout` is `3600` seconds (60 minutes) instead of `0`.

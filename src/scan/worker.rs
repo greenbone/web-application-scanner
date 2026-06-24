@@ -19,7 +19,9 @@ use crate::{
     scan::{
         RetryingScanStateCoordinator, Scan, ScanProgress, ScanResult, ScanStateCoordinator,
         ScanStatus, observability::emit_queue_wait_telemetry,
-        preferences::{SCAN_MODE_PREFERENCE_ID, ScanMode}, queue::ScanQueue, retry::IsTransient,
+        preferences::{AJAX_SPIDER_TIMEOUT_PREFERENCE_ID, SCAN_MODE_PREFERENCE_ID, ScanMode},
+        queue::ScanQueue,
+        retry::IsTransient,
     },
     storage::{StorageError, StorageHandle},
     zapclient::ajaxspider::AjaxSpiderStatus,
@@ -30,6 +32,7 @@ use crate::{
 const DEFAULT_SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const DEFAULT_ALERT_PAGE_SIZE: u32 = 100;
 const DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION: Duration = Duration::from_secs(5);
+const DEFAULT_AJAX_SPIDER_TIMEOUT_SECONDS: u64 = 60 * 60;
 
 #[derive(Debug, Clone)]
 pub struct ScanRuntimeConfig {
@@ -184,6 +187,15 @@ impl ScanWorker {
             .unwrap_or_else(ScanMode::default_mode)
     }
 
+    fn resolve_ajax_spider_timeout_seconds(scan: &Scan) -> u64 {
+        scan
+            .scan_preferences
+            .iter()
+            .find(|pref| pref.id == AJAX_SPIDER_TIMEOUT_PREFERENCE_ID)
+            .and_then(|pref| pref.value.parse::<u64>().ok())
+            .unwrap_or(DEFAULT_AJAX_SPIDER_TIMEOUT_SECONDS)
+    }
+
     async fn run(self) {
         loop {
             let scan_id = self.queue.dequeue().await;
@@ -232,6 +244,7 @@ impl ScanWorker {
     async fn execute_scan(&self, scan: &Scan) -> Result<(), WorkerError> {
         let mut progress = ScanProgress::new(&scan.target.hosts);
         let scan_mode = Self::resolve_scan_mode(scan);
+        let ajax_spider_timeout_seconds = Self::resolve_ajax_spider_timeout_seconds(scan);
         self.persist_progress(&scan.id, &progress).await?;
 
         let (context_name, context_id) = self.ensure_context(scan).await?;
@@ -254,7 +267,14 @@ impl ScanWorker {
             }
 
             if self
-                .run_spider_phase(&scan.id, &context_name, target, index, &mut progress)
+                .run_spider_phase(
+                    &scan.id,
+                    &context_name,
+                    target,
+                    index,
+                    &mut progress,
+                    ajax_spider_timeout_seconds,
+                )
                 .await?
                 == ScanExecutionControl::StopExecution
             {
@@ -343,9 +363,14 @@ impl ScanWorker {
         target: &str,
         index: usize,
         progress: &mut ScanProgress,
+        ajax_spider_timeout_seconds: u64,
     ) -> Result<ScanExecutionControl, WorkerError> {
         progress.mark_spider_running(index);
         self.persist_progress(scan_id, progress).await?;
+
+        self.zap_client
+            .set_ajax_spider_max_duration(ajax_spider_timeout_seconds)
+            .await?;
 
         self.zap_client
             .start_ajax_spider_scan(context_name, target, true, false)

@@ -353,7 +353,7 @@ async fn get_default_preferences_returns_scan_mode_and_ajax_spider_timeout() {
     assert!(preferences.iter().any(|p| {
         p.id == "ajax_spider_timeout"
             && p.preference_type == "integer"
-            && p.default_value == "0"
+            && p.default_value == "3600"
             && p.values.is_none()
     }));
 }
@@ -373,7 +373,7 @@ async fn create_scan_persists_effective_defaults_when_no_preferences_given() {
     assert!(persisted
         .scan_preferences
         .iter()
-        .any(|p| p.id == "ajax_spider_timeout" && p.value == "0"));
+        .any(|p| p.id == "ajax_spider_timeout" && p.value == "3600"));
 }
 
 #[tokio::test]

@@ -38,6 +38,28 @@ async fn start_ajax_spider_scan_posts_to_zap_ajax_scan_endpoint() {
 }
 
 #[tokio::test]
+async fn set_ajax_spider_max_duration_posts_to_zap_option_endpoint() {
+    let server = MockServer::start().await;
+
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .and(body_string_contains(format!("apikey={API_KEY}")))
+        .and(body_string_contains("Integer=15"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"OK\"}"))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let client =
+        ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
+
+    client
+        .set_ajax_spider_max_duration(15)
+        .await
+        .expect("set_ajax_spider_max_duration should succeed when Result is OK");
+}
+
+#[tokio::test]
 async fn start_ajax_spider_scan_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 

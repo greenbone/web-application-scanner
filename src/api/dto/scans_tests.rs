@@ -267,7 +267,7 @@ fn preferences_response_supports_ajax_spider_timeout_definition() {
             "type": "integer",
             "name": "AJAX Spider Timeout",
             "description": "Scan-level timeout in seconds; 0 means unlimited",
-            "default": "0"
+            "default": "3600"
         }
     ]);
 
@@ -277,6 +277,6 @@ fn preferences_response_supports_ajax_spider_timeout_definition() {
     assert_eq!(decoded.0.len(), 1);
     assert_eq!(decoded.0[0].id, "ajax_spider_timeout");
     assert_eq!(decoded.0[0].preference_type, "integer");
-    assert_eq!(decoded.0[0].default_value, "0");
+    assert_eq!(decoded.0[0].default_value, "3600");
     assert!(decoded.0[0].values.is_none());
 }
