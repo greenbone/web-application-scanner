@@ -1,6 +1,6 @@
 # HTTP Mock Refactor Plan
 
-Status: Proposed (2026-06-24)
+Status: In Progress (2026-06-24)
 
 ## Goal
 
@@ -85,6 +85,8 @@ Examples:
 
 ### Phase 1: src/scan/worker_tests.rs
 
+Status: Done (2026-06-24)
+
 - Extract repeated context lifecycle mounts.
 - Expand existing helper style already used in this file.
 - Replace repetitive blocks in mock_zap_server_* functions with helper calls.
@@ -95,6 +97,12 @@ Acceptance:
 - Same endpoint paths, bodies, and expect(n) semantics.
 - Existing test names/assertions unchanged.
 - Improved readability with shorter scenario setup.
+
+Validation recorded:
+
+- `src/scan/worker_tests.rs` compiles without errors after refactor.
+- Worker runtime tests executed and passed.
+- Full test suite executed and passed.
 
 ### Phase 2: src/zapclient/context_tests.rs
 
