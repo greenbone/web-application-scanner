@@ -74,6 +74,34 @@ fn make_safe_mode_request_with_ajax_timeout(host: &str, timeout_seconds: u64) ->
     }
 }
 
+async fn mount_context_new_ok(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
+        )
+        .mount(server)
+        .await;
+}
+
+async fn mount_context_include_ok(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(server)
+        .await;
+}
+
+async fn mount_context_remove(server: &MockServer, status_code: u16, body: &'static str) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(ResponseTemplate::new(status_code).set_body_raw(body, "application/json"))
+        .mount(server)
+        .await;
+}
+
 async fn mount_ajax_spider_set_option_max_duration_ok(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
@@ -84,85 +112,192 @@ async fn mount_ajax_spider_set_option_max_duration_ok(server: &MockServer) {
         .await;
 }
 
-async fn mock_zap_server() -> MockServer {
-    let server = MockServer::start().await;
-
+async fn mount_ajax_spider_set_option_max_duration(
+    server: &MockServer,
+    timeout_seconds: u64,
+    expected_calls: u64,
+) {
     Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
+        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
+        .and(body_string_contains(format!("Integer={timeout_seconds}")))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
         )
-        .mount(&server)
+        .expect(expected_calls)
+        .mount(server)
         .await;
+}
 
-    mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
+async fn mount_ajax_spider_scan_ok(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/action/scan"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
         )
-        .mount(&server)
+        .mount(server)
         .await;
+}
 
+async fn mount_ajax_spider_scan_ok_with_expect(server: &MockServer, expected_calls: u64) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ajax_spider_status(server: &MockServer, status: &'static str) {
     Mock::given(method("POST"))
         .and(path("/JSON/ajaxSpider/view/status"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
+            ResponseTemplate::new(200)
+                .set_body_raw(format!(r#"{{"status":"{status}"}}"#), "application/json"),
         )
-        .mount(&server)
+        .mount(server)
         .await;
+}
 
+async fn mount_ajax_spider_stop_ok(server: &MockServer) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .mount(server)
+        .await;
+}
+
+async fn mount_ajax_spider_stop_ok_with_expect(server: &MockServer, expected_calls: u64) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
+        )
+        .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_scan_ok(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/JSON/ascan/action/scan"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
         )
-        .mount(&server)
+        .mount(server)
         .await;
+}
 
+async fn mount_ascan_scan_ok_with_expect(server: &MockServer, expected_calls: u64) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
+        )
+        .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_status(server: &MockServer, status_code: u16, body: &'static str) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(ResponseTemplate::new(status_code).set_body_raw(body, "application/json"))
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_status_with_expect(
+    server: &MockServer,
+    status_code: u16,
+    body: &'static str,
+    expected_calls: u64,
+) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(ResponseTemplate::new(status_code).set_body_raw(body, "application/json"))
+        .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_status_with_delay(
+    server: &MockServer,
+    delay: Duration,
+    status_code: u16,
+    body: &'static str,
+) {
     Mock::given(method("POST"))
         .and(path("/JSON/ascan/view/status"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
+            ResponseTemplate::new(status_code)
+                .set_delay(delay)
+                .set_body_raw(body, "application/json"),
         )
-        .mount(&server)
+        .mount(server)
         .await;
+}
 
+async fn mount_ascan_stop(server: &MockServer, status_code: u16, expected_calls: u64) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/stop"))
+        .respond_with(
+            ResponseTemplate::new(status_code)
+                .set_body_raw(
+                    if status_code == 200 {
+                        r#"{"Result":"OK"}"#
+                    } else {
+                        r#"{"code":"internal"}"#
+                    },
+                    "application/json",
+                ),
+        )
+            .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+async fn mount_alerts_empty(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/JSON/alert/view/alerts"))
-        .and(body_string_contains("start=0"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(
-            r#"{"alerts":[{"alertRef":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
-            "application/json",
-        ))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .and(body_string_contains("start=1"))
         .respond_with(
             ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
         )
-        .mount(&server)
+        .mount(server)
         .await;
+}
 
+async fn mount_alerts_page(server: &MockServer, start: u64, body: &'static str) {
     Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
+        .and(path("/JSON/alert/view/alerts"))
+        .and(body_string_contains(format!("start={start}")))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(body, "application/json"))
+        .mount(server)
         .await;
+}
+
+async fn mock_zap_server() -> MockServer {
+    let server = MockServer::start().await;
+
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+    mount_alerts_page(
+        &server,
+        0,
+        r#"{"alerts":[{"alertRef":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
+    )
+    .await;
+    mount_alerts_page(&server, 1, r#"{"alerts":[]}"#).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -170,73 +305,15 @@ async fn mock_zap_server() -> MockServer {
 async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -244,91 +321,16 @@ async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer 
 async fn mock_zap_server_for_ajax_spider_timeout_enforcement() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
-        .and(body_string_contains("Integer=1"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration(&server, 1, 1).await;
+    mount_ajax_spider_scan_ok_with_expect(&server, 1).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ajax_spider_stop_ok_with_expect(&server, 0).await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -336,91 +338,16 @@ async fn mock_zap_server_for_ajax_spider_timeout_enforcement() -> MockServer {
 async fn mock_zap_server_for_unlimited_ajax_spider_timeout() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
-        .and(body_string_contains("Integer=0"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration(&server, 0, 1).await;
+    mount_ajax_spider_scan_ok_with_expect(&server, 1).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ajax_spider_stop_ok_with_expect(&server, 0).await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -428,82 +355,15 @@ async fn mock_zap_server_for_unlimited_ajax_spider_timeout() -> MockServer {
 async fn mock_zap_server_for_default_ajax_spider_timeout() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
-        .and(body_string_contains("Integer=3600"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration(&server, 3600, 1).await;
+    mount_ajax_spider_scan_ok_with_expect(&server, 1).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -511,90 +371,16 @@ async fn mock_zap_server_for_default_ajax_spider_timeout() -> MockServer {
 async fn mock_zap_server_for_spider_timeout_grace_stop_request() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
-        .and(body_string_contains("Integer=1"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"running"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration(&server, 1, 1).await;
+    mount_ajax_spider_scan_ok_with_expect(&server, 1).await;
+    mount_ajax_spider_status(&server, "running").await;
+    mount_ajax_spider_stop_ok(&server).await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -602,91 +388,16 @@ async fn mock_zap_server_for_spider_timeout_grace_stop_request() -> MockServer {
 async fn mock_zap_server_for_spider_stop_status_change_timeout() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/setOptionMaxDuration"))
-        .and(body_string_contains("Integer=1"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"running"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .expect(0)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration(&server, 1, 1).await;
+    mount_ajax_spider_scan_ok_with_expect(&server, 1).await;
+    mount_ajax_spider_status(&server, "running").await;
+    mount_ajax_spider_stop_ok_with_expect(&server, 1).await;
+    mount_ascan_scan_ok_with_expect(&server, 0).await;
+    mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -694,63 +405,14 @@ async fn mock_zap_server_for_spider_stop_status_change_timeout() -> MockServer {
 async fn mock_zap_server_with_active_status_error() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(500).set_body_raw(r#"{"code":"internal"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 500, r#"{"code":"internal"}"#).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -758,82 +420,21 @@ async fn mock_zap_server_with_active_status_error() -> MockServer {
 async fn mock_zap_server_with_remove_context_error() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"100"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .and(body_string_contains("start=0"))
-        .respond_with(ResponseTemplate::new(200).set_body_raw(
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+    mount_alerts_page(
+        &server,
+        0,
             r#"{"alerts":[{"alertRef":"10001","name":"Finding","risk":"Low","description":"detail","url":"https://example.test/app"}]}"#,
-            "application/json",
-        ))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .and(body_string_contains("start=1"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(500).set_body_raw(r#"{"code":"internal"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    )
+    .await;
+    mount_alerts_page(&server, 1, r#"{"alerts":[]}"#).await;
+    mount_context_remove(&server, 500, r#"{"code":"internal"}"#).await;
 
     server
 }
@@ -841,80 +442,16 @@ async fn mock_zap_server_with_remove_context_error() -> MockServer {
 async fn mock_zap_server_for_running_stop_in_active_scan() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"10"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"10"}"#).await;
+    mount_ascan_stop(&server, 200, 1).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -922,64 +459,14 @@ async fn mock_zap_server_for_running_stop_in_active_scan() -> MockServer {
 async fn mock_zap_server_for_running_stop_in_spider() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"running"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "running").await;
+    mount_ajax_spider_stop_ok_with_expect(&server, 1).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -987,80 +474,16 @@ async fn mock_zap_server_for_running_stop_in_spider() -> MockServer {
 async fn mock_zap_server_for_running_stop_in_active_stage_with_stop_failure() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"10"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(500).set_body_raw(r#"{"code":"internal"}"#, "application/json"),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"10"}"#).await;
+    mount_ascan_stop(&server, 500, 1).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
@@ -1068,73 +491,21 @@ async fn mock_zap_server_for_running_stop_in_active_stage_with_stop_failure() ->
 async fn mock_zap_server_for_forced_stop_timeout() -> MockServer {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"contextId":"ctx-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
     mount_ajax_spider_set_option_max_duration_ok(&server).await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"status":"stopped"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"scan":"active-1"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .set_delay(Duration::from_millis(200))
-                .set_body_raw(r#"{"status":"10"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"alerts":[]}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_raw(r#"{"Result":"OK"}"#, "application/json"),
-        )
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status_with_delay(
+        &server,
+        Duration::from_millis(200),
+        200,
+        r#"{"status":"10"}"#,
+    )
+    .await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
 }
