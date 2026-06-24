@@ -35,6 +35,7 @@ const DEFAULT_ALERT_PAGE_SIZE: u32 = 100;
 const DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION: Duration = Duration::from_secs(5);
 const DEFAULT_AJAX_SPIDER_TIMEOUT_SECONDS: u64 = 60 * 60;
 const DEFAULT_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(60);
+const DEFAULT_PHASE_STOP_STATUS_CHANGE_TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Debug, Clone)]
 pub struct ScanRuntimeConfig {
@@ -44,6 +45,7 @@ pub struct ScanRuntimeConfig {
     pub alert_page_size: u32,
     pub passive_scan_placeholder_duration: Duration,
     pub ajax_spider_timeout_grace_period: Duration,
+    pub phase_stop_status_change_timeout: Duration,
     pub stop_grace_period: Duration,
     /// Maximum number of retry attempts for transient failures before a scan transitions to `failed`.
     pub retry_max_retries: u32,
@@ -60,6 +62,7 @@ impl Default for ScanRuntimeConfig {
             alert_page_size: DEFAULT_ALERT_PAGE_SIZE,
             passive_scan_placeholder_duration: DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION,
             ajax_spider_timeout_grace_period: DEFAULT_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD,
+            phase_stop_status_change_timeout: DEFAULT_PHASE_STOP_STATUS_CHANGE_TIMEOUT,
             stop_grace_period: Duration::from_secs(300),
             retry_max_retries: 10,
             retry_max_delay: Duration::from_secs(60),
@@ -382,6 +385,7 @@ impl ScanWorker {
             )
         };
         let mut timeout_stop_sent = false;
+        let mut stop_status_change_deadline: Option<Instant> = None;
 
         self.zap_client
             .set_ajax_spider_max_duration(ajax_spider_timeout_seconds)
@@ -401,6 +405,19 @@ impl ScanWorker {
             let status = self.zap_client.get_ajax_spider_status().await?;
             match status {
                 AjaxSpiderStatus::Running => {
+                    if stop_status_change_deadline
+                        .is_some_and(|deadline| Instant::now() >= deadline)
+                    {
+                        warn!(
+                            scan_id,
+                            target,
+                            timeout_seconds =
+                                self.config.phase_stop_status_change_timeout.as_secs(),
+                            "ajax spider did not report status change after stop request within deadline; continuing to next phase"
+                        );
+                        break;
+                    }
+
                     if !timeout_stop_sent
                         && spider_stop_deadline.is_some_and(|deadline| Instant::now() >= deadline)
                     {
@@ -414,6 +431,8 @@ impl ScanWorker {
                         );
                         self.zap_client.stop_ajax_spider_scan().await?;
                         timeout_stop_sent = true;
+                        stop_status_change_deadline =
+                            Some(Instant::now() + self.config.phase_stop_status_change_timeout);
                     }
                     sleep(self.config.scan_poll_interval).await
                 }
