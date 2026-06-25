@@ -12,6 +12,15 @@ use super::{AlertRiskLevel, ZapClient, ZapClientError};
 
 const API_KEY: &str = "test-api-key";
 
+async fn mount_alerts(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/alert/view/alerts"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test]
 async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
     let server = MockServer::start().await;
@@ -59,16 +68,13 @@ async fn get_alerts_gets_zap_alert_view_alerts_endpoint() {
 async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_string(
-                "{\"alerts\":[{\"alertRef\":\"50001\",\"name\":\"Custom Risk\",\"risk\":\"Critical\",\"description\":\"Unknown risk value from API\",\"url\":\"https://example.com/custom\"}]}",
-            ),
-        )
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_alerts(
+        &server,
+        ResponseTemplate::new(200).set_body_string(
+            "{\"alerts\":[{\"alertRef\":\"50001\",\"name\":\"Custom Risk\",\"risk\":\"Critical\",\"description\":\"Unknown risk value from API\",\"url\":\"https://example.com/custom\"}]}",
+        ),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -86,12 +92,11 @@ async fn get_alerts_returns_unknown_risk_level_for_unrecognized_value() {
 async fn get_alerts_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_alerts(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -114,12 +119,11 @@ async fn get_alerts_returns_unexpected_status_on_http_error() {
 async fn get_alerts_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/alert/view/alerts"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"alertItems\":[]}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_alerts(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"alertItems\":[]}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");

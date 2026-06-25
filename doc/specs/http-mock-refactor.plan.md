@@ -1,6 +1,6 @@
 # HTTP Mock Refactor Plan
 
-Status: In Progress (2026-06-24)
+Status: Done (2026-06-25)
 
 ## Goal
 
@@ -106,6 +106,8 @@ Validation recorded:
 
 ### Phase 2: src/zapclient/context_tests.rs
 
+Status: Done (2026-06-25)
+
 - Extract helpers for context action success/failure patterns.
 - Keep edge-case response payloads visible per test.
 
@@ -114,7 +116,14 @@ Acceptance:
 - Repeated mount boilerplate reduced.
 - Error handling test clarity preserved.
 
+Validation recorded:
+
+- `context_tests` targeted run executed and passed (`16 passed`).
+- Full test suite executed and passed.
+
 ### Phase 3: src/zapclient/ajaxspider_tests.rs and src/zapclient/ascan_tests.rs
+
+Status: Done (2026-06-25)
 
 - Introduce endpoint-focused helpers for scan/status/stop actions.
 - Keep status parsing and unexpected content tests explicit.
@@ -124,7 +133,15 @@ Acceptance:
 - Less repeated setup.
 - Parsing and validation behavior remains obvious in tests.
 
+Validation recorded:
+
+- `ajaxspider_tests` targeted run executed and passed (`13 passed`).
+- `ascan_tests` targeted run executed and passed (`9 passed`).
+- Full test suite executed and passed.
+
 ### Phase 4: src/zapclient/alert_tests.rs
+
+Status: Done (2026-06-25)
 
 - Add helpers for paginated alerts and malformed payload responses.
 - Preserve visibility of paging parameters and response body structure.
@@ -132,6 +149,11 @@ Acceptance:
 Acceptance:
 
 - Reduced duplication with clear pagination intent.
+
+Validation recorded:
+
+- `alert_tests` targeted run executed and passed (`5 passed`).
+- Full test suite executed and passed.
 
 ## Helper Placement
 
