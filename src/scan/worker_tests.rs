@@ -639,7 +639,6 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -693,7 +692,6 @@ async fn runtime_persists_passive_scan_raw_counts_and_completes_on_zero_records(
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -745,7 +743,6 @@ async fn runtime_skips_active_scan_when_scan_mode_is_safe() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -779,7 +776,6 @@ async fn runtime_sets_ajax_spider_timeout_option_and_continues_scan_flow() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(20),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -814,7 +810,6 @@ async fn runtime_treats_zero_ajax_spider_timeout_as_unlimited() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(20),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -849,7 +844,6 @@ async fn runtime_applies_default_ajax_spider_timeout_when_preference_is_omitted(
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(20),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -881,7 +875,6 @@ async fn runtime_stops_ajax_spider_when_timeout_plus_grace_period_is_exceeded() 
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(20),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             ajax_spider_timeout_grace_period: Duration::from_millis(50),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
@@ -921,7 +914,6 @@ async fn runtime_continues_when_ajax_spider_status_does_not_change_after_local_s
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(20),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             ajax_spider_timeout_grace_period: Duration::from_millis(50),
             phase_stop_status_change_timeout: Duration::from_millis(80),
             stop_grace_period: Duration::from_secs(5),
@@ -958,7 +950,6 @@ async fn runtime_transitions_running_scan_to_failed_on_worker_error() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -990,7 +981,6 @@ async fn runtime_keeps_succeeded_status_when_context_cleanup_fails() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(300),
             ..ScanRuntimeConfig::default()
         },
@@ -1065,7 +1055,6 @@ async fn runtime_stop_running_scan_in_active_stage_transitions_to_stopped_and_cl
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -1103,7 +1092,6 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -1141,7 +1129,6 @@ async fn runtime_stop_running_scan_in_passive_stage_transitions_to_stopped_and_c
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_secs(2),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -1178,7 +1165,6 @@ async fn runtime_stop_running_scan_fails_when_zap_stop_fails_non_transiently() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_secs(5),
             ..ScanRuntimeConfig::default()
         },
@@ -1214,7 +1200,6 @@ async fn runtime_forces_failed_when_stop_grace_period_expires() {
             alert_poll_interval: Duration::from_millis(1),
             scan_poll_interval: Duration::from_millis(1),
             alert_page_size: 100,
-            passive_scan_placeholder_duration: Duration::from_millis(1),
             stop_grace_period: Duration::from_millis(50),
             ..ScanRuntimeConfig::default()
         },
