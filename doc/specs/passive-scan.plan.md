@@ -1,6 +1,6 @@
 # Passive Scan Refactor Plan
 
-Status: Planned (2026-06-25)
+Status: Done (2026-06-25)
 
 ## Goal
 
@@ -178,7 +178,7 @@ Validation recorded:
 
 ### Phase 4: Update worker runtime tests
 
-Status: Planned
+Status: Done (2026-06-25)
 
 - Add records-to-scan mock helpers in worker tests.
 - Update passive-stage stop test setup to use records-driven passive flow.
@@ -191,6 +191,10 @@ Acceptance:
 - Worker tests validate records-driven passive lifecycle behavior.
 - Existing stop semantics remain verified.
 
+Validation recorded:
+
+- worker runtime tests executed and passed.
+
 ## Validation
 
 After implementation, run targeted tests and then broader zapclient coverage.
@@ -199,6 +203,13 @@ After implementation, run targeted tests and then broader zapclient coverage.
 - cargo test worker_tests -- --nocapture
 - cargo test progress_tests -- --nocapture
 - cargo test zapclient -- --nocapture
+
+Closing validation recorded (2026-06-25):
+
+- cargo test pscan_tests -- --nocapture passed.
+- cargo test worker_tests -- --nocapture passed.
+- cargo test progress_tests -- --nocapture passed.
+- cargo test zapclient -- --nocapture passed.
 
 ## Risks and Mitigations
 

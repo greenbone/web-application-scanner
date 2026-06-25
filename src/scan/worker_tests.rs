@@ -4,9 +4,10 @@
 
 use std::time::Duration;
 use tracing_test::traced_test;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use wiremock::{
-    Mock, MockServer, ResponseTemplate,
+    Mock, MockServer, Request, Respond, ResponseTemplate,
     matchers::{body_string_contains, method, path},
 };
 
@@ -287,6 +288,62 @@ async fn mount_pscan_records_to_scan(server: &MockServer, records_to_scan: &'sta
         .await;
 }
 
+async fn mount_pscan_records_to_scan_with_expect(
+    server: &MockServer,
+    records_to_scan: &'static str,
+    expected_calls: u64,
+) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/pscan/view/recordsToScan"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            format!(r#"{{"recordsToScan":"{records_to_scan}"}}"#),
+            "application/json",
+        ))
+        .expect(expected_calls)
+        .mount(server)
+        .await;
+}
+
+#[derive(Debug)]
+struct PassiveRecordsSequenceResponder {
+    sequence: Vec<&'static str>,
+    fallback: &'static str,
+    cursor: AtomicUsize,
+}
+
+impl PassiveRecordsSequenceResponder {
+    fn new(sequence: Vec<&'static str>, fallback: &'static str) -> Self {
+        Self {
+            sequence,
+            fallback,
+            cursor: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl Respond for PassiveRecordsSequenceResponder {
+    fn respond(&self, _request: &Request) -> ResponseTemplate {
+        let index = self.cursor.fetch_add(1, Ordering::SeqCst);
+        let value = self.sequence.get(index).copied().unwrap_or(self.fallback);
+        ResponseTemplate::new(200).set_body_raw(
+            format!(r#"{{"recordsToScan":"{value}"}}"#),
+            "application/json",
+        )
+    }
+}
+
+async fn mount_pscan_records_to_scan_sequence(
+    server: &MockServer,
+    sequence: Vec<&'static str>,
+    fallback: &'static str,
+) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/pscan/view/recordsToScan"))
+        .respond_with(PassiveRecordsSequenceResponder::new(sequence, fallback))
+        .mount(server)
+        .await;
+}
+
 async fn mock_zap_server() -> MockServer {
     let server = MockServer::start().await;
 
@@ -558,7 +615,50 @@ async fn mock_zap_server_for_passive_records_progression() -> MockServer {
     mount_ajax_spider_status(&server, "stopped").await;
     mount_ascan_scan_ok(&server).await;
     mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
-    mount_pscan_records_to_scan(&server, "0").await;
+    mount_pscan_records_to_scan_with_expect(&server, "0", 1).await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
+
+    server
+}
+
+async fn mock_zap_server_for_passive_records_without_decrease() -> MockServer {
+    let server = MockServer::start().await;
+
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+    mount_pscan_records_to_scan(&server, "10").await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
+
+    server
+}
+
+async fn mock_zap_server_for_passive_records_temporary_increase() -> MockServer {
+    mock_zap_server_for_passive_records_sequence(vec!["10", "8", "9"], "9").await
+}
+
+async fn mock_zap_server_for_passive_records_sequence(
+    sequence: Vec<&'static str>,
+    fallback: &'static str,
+) -> MockServer {
+    let server = MockServer::start().await;
+
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+
+    mount_pscan_records_to_scan_sequence(&server, sequence, fallback).await;
+
     mount_alerts_empty(&server).await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
@@ -604,6 +704,37 @@ async fn wait_for_passive_running(storage: &dyn ScanStorage, scan_id: &str) {
     }
 
     panic!("scan did not reach passive running state");
+}
+
+async fn wait_for_passive_records_and_percentage(
+    storage: &dyn ScanStorage,
+    scan_id: &str,
+    expected_current_records: u64,
+    expected_percentage: i64,
+) {
+    for _ in 0..200 {
+        let scan = storage.get_scan(scan_id).await.unwrap();
+        let current_records = scan
+            .progress
+            .as_ref()
+            .and_then(|progress| progress.pointer("/targets/0/passive_scan_current_records"))
+            .and_then(serde_json::Value::as_u64);
+        let percentage = scan
+            .progress
+            .as_ref()
+            .and_then(|progress| progress.pointer("/targets/0/passive_scan_percentage"))
+            .and_then(serde_json::Value::as_i64);
+
+        if current_records == Some(expected_current_records)
+            && percentage == Some(expected_percentage)
+        {
+            return;
+        }
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+
+    panic!("scan did not reach expected passive records/percentage state");
 }
 
 async fn wait_for_request_path(server: &MockServer, expected_path: &str) {
@@ -727,6 +858,236 @@ async fn runtime_persists_passive_scan_raw_counts_and_completes_on_zero_records(
             .and_then(serde_json::Value::as_i64),
         Some(100)
     );
+}
+
+#[tokio::test]
+async fn runtime_keeps_passive_scan_percentage_at_zero_without_records_decrease() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_without_decrease().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 10, 0).await;
+
+    // Passive records remain constant above zero, so passive percentage must stay at 0.
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    let progress = scan.progress.expect("progress should be persisted");
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_initial_records")
+            .and_then(serde_json::Value::as_u64),
+        Some(10)
+    );
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_current_records")
+            .and_then(serde_json::Value::as_u64),
+        Some(10)
+    );
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_percentage")
+            .and_then(serde_json::Value::as_i64),
+        Some(0)
+    );
+
+    service.stop_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Stopped).await;
+}
+
+#[tokio::test]
+async fn runtime_keeps_passive_percentage_monotonic_when_records_temporarily_increase() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_temporary_increase().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(5),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+
+    // After 10 -> 8 -> 9, percentage must remain 20 (monotonic) despite the increase.
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 9, 20).await;
+
+    service.stop_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Stopped).await;
+}
+
+#[tokio::test]
+async fn runtime_keeps_passive_percentage_stable_during_plateau_and_completes_on_zero() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_sequence(
+        vec!["10", "8", "8", "8", "8", "8", "0"],
+        "0",
+    )
+    .await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+
+    // 10 -> 8 sets 20%; repeated 8 values must keep percentage stable at 20.
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 8, 20).await;
+
+    // Sequence eventually reaches zero and passive phase must complete.
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    let progress = scan.progress.expect("progress should be persisted");
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_current_records")
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_percentage")
+            .and_then(serde_json::Value::as_i64),
+        Some(100)
+    );
+}
+
+#[tokio::test]
+async fn runtime_keeps_passive_percentage_monotonic_across_multiple_temporary_increases() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_sequence(
+        vec!["20", "15", "17", "14", "16", "16", "16", "0"],
+        "0",
+    )
+    .await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+
+    // 20 -> 15 sets 25%; 17 is ignored; 14 sets 30%; 16 must keep 30%.
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 16, 30).await;
+
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    let progress = scan.progress.expect("progress should be persisted");
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_percentage")
+            .and_then(serde_json::Value::as_i64),
+        Some(100)
+    );
+}
+
+#[tokio::test]
+async fn runtime_ignores_records_increase_above_initial_until_a_lower_value_appears() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_sequence(
+        vec!["10", "12", "12", "12", "9", "0"],
+        "0",
+    )
+    .await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(20),
+            alert_page_size: 100,
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_running(storage.as_ref(), &scan_id).await;
+    wait_for_passive_running(storage.as_ref(), &scan_id).await;
+
+    // 10 -> 12 must not reduce below 0%; once 9 appears, progress advances to 10%.
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 12, 0).await;
+    wait_for_passive_records_and_percentage(storage.as_ref(), &scan_id, 9, 10).await;
+
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
 }
 
 #[traced_test]
