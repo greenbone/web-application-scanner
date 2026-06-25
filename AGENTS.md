@@ -22,3 +22,21 @@ Testing guidelines for specific modules or features may be found in the `doc/spe
 - Always document the intention of tests. Test names, fixture names, or short
   comments should make clear which behavior, regression, or contract the test
   protects.
+
+### HTTP mock conventions
+
+When using Wiremock (or equivalent HTTP mocking), follow these conventions:
+
+- Prefer endpoint-level helper functions that mount one endpoint behavior at a
+  time (for example, one helper per ZAP endpoint path).
+- Keep helper abstractions shallow. Avoid deep/builder-style layers that hide
+  scenario intent; test setup should remain readable without tracing multiple
+  indirections.
+- Mount endpoints in the same order they are expected to be requested in the
+  scenario flow (for example, context setup -> spider -> active scan -> alerts
+  -> passive scan -> cleanup).
+- Keep uncommon expectations (special bodies, unusual `expect(n)` counts,
+  explicit negative cases) close to the specific test scenario rather than
+  hiding them behind generic helpers.
+- When introducing shared mock helpers, use them only for obvious repetition;
+  prefer local test-file helpers first.
