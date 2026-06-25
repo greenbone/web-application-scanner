@@ -195,6 +195,22 @@ Validation recorded:
 
 - worker runtime tests executed and passed.
 
+### Phase 5: Add pscan sequence-sidecar regressions
+
+Status: Planned
+
+- Add sequence-oriented sidecar tests in `src/zapclient/pscan_tests.rs` for
+  mixed response progressions (for example, valid schema transitions and
+  malformed content boundaries across repeated calls).
+- Keep helper abstraction local and shallow in the pscan test file.
+- Preserve explicit endpoint contract assertions for
+  `JSON/pscan/view/recordsToScan`.
+
+Acceptance:
+
+- `pscan_tests` include targeted sequence regressions that remain easy to read.
+- Existing pscan contract/error tests remain intact.
+
 ## Validation
 
 After implementation, run targeted tests and then broader zapclient coverage.
@@ -203,6 +219,10 @@ After implementation, run targeted tests and then broader zapclient coverage.
 - cargo test worker_tests -- --nocapture
 - cargo test progress_tests -- --nocapture
 - cargo test zapclient -- --nocapture
+
+Additional validation for Phase 5:
+
+- cargo test zapclient::pscan_tests -- --nocapture
 
 Closing validation recorded (2026-06-25):
 
