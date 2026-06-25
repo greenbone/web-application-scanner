@@ -244,18 +244,15 @@ async fn mount_ascan_status_with_delay(
 async fn mount_ascan_stop(server: &MockServer, status_code: u16, expected_calls: u64) {
     Mock::given(method("POST"))
         .and(path("/JSON/ascan/action/stop"))
-        .respond_with(
-            ResponseTemplate::new(status_code)
-                .set_body_raw(
-                    if status_code == 200 {
-                        r#"{"Result":"OK"}"#
-                    } else {
-                        r#"{"code":"internal"}"#
-                    },
-                    "application/json",
-                ),
-        )
-            .expect(expected_calls)
+        .respond_with(ResponseTemplate::new(status_code).set_body_raw(
+            if status_code == 200 {
+                r#"{"Result":"OK"}"#
+            } else {
+                r#"{"code":"internal"}"#
+            },
+            "application/json",
+        ))
+        .expect(expected_calls)
         .mount(server)
         .await;
 }
