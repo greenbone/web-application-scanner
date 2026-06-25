@@ -107,7 +107,7 @@ Update rules:
 
 ### Phase 1: Add ZAP recordsToScan client support
 
-Status: Planned
+Status: Done (2026-06-25)
 
 - Add a new pscan module and wire it through zapclient exports.
 - Implement a ZapClient method that calls JSON/pscan/view/recordsToScan,
@@ -121,6 +121,11 @@ Acceptance:
 - Endpoint wrapper follows existing zapclient error-handling conventions.
 - Retry wrapper parity matches other zapclient operations.
 - New pscan tests pass.
+
+Validation recorded:
+
+- pscan tests executed and passed.
+- zapclient suite executed and passed.
 
 ### Phase 2: Replace passive placeholder workflow in worker
 

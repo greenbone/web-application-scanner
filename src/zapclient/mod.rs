@@ -8,6 +8,7 @@ pub mod ajaxspider;
 pub mod alert;
 pub mod ascan;
 pub mod context;
+pub mod pscan;
 
 use crate::config::settings::Settings;
 use reqwest::StatusCode;
@@ -332,6 +333,22 @@ impl RetryingZapClient {
                         .get_alerts(&context, base.as_deref(), start, count)
                         .await
                 }
+            },
+            self.max_retries,
+            self.max_delay,
+        )
+        .await
+    }
+
+    /// Get the number of records left for passive scanning.
+    pub async fn get_passive_scan_records_to_scan(&self) -> Result<u64, ZapClientError> {
+        let inner = self.inner.clone();
+
+        crate::scan::retry::with_retry(
+            "zap.get_passive_scan_records_to_scan",
+            move || {
+                let inner = inner.clone();
+                async move { inner.get_passive_scan_records_to_scan().await }
             },
             self.max_retries,
             self.max_delay,
