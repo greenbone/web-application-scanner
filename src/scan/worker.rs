@@ -471,19 +471,78 @@ impl ScanWorker {
         progress.mark_passive_scan_running(index);
         self.persist_progress(scan_id, progress).await?;
 
-        let start = Instant::now();
-        while start.elapsed() < self.config.passive_scan_placeholder_duration {
+        let initial_records = self.zap_client.get_passive_scan_records_to_scan().await?;
+        progress.set_passive_scan_records(index, initial_records, initial_records);
+
+        if initial_records == 0 {
+            progress.mark_passive_scan_done(index);
+            self.persist_progress(scan_id, progress).await?;
+            return Ok(ScanExecutionControl::Continue);
+        }
+
+        self.persist_progress(scan_id, progress).await?;
+
+        let mut min_records_seen = initial_records;
+
+        loop {
             if self.stop_requested(scan_id).await? {
                 self.handle_stop_request(scan_id, Some(context_name), RunningStage::PassiveScan)
                     .await?;
                 return Ok(ScanExecutionControl::StopExecution);
             }
+
+            let current_records = self.zap_client.get_passive_scan_records_to_scan().await?;
+
+            let previous_current = progress.targets[index].passive_scan_current_records;
+            let mut should_persist = false;
+
+            if previous_current != Some(current_records) {
+                progress.set_passive_scan_records(index, initial_records, current_records);
+                should_persist = true;
+            }
+
+            if current_records > min_records_seen {
+                debug!(
+                    scan_id,
+                    target_index = index,
+                    previous_records = min_records_seen,
+                    current_records,
+                    "recordsToScan increased during passive scan; keeping monotonic progress"
+                );
+            } else if current_records < min_records_seen {
+                min_records_seen = current_records;
+
+                let previous_percentage = progress.targets[index].passive_scan_percentage;
+                let percentage = Self::calculate_passive_scan_percentage(initial_records, current_records);
+                progress.update_passive_scan(index, percentage);
+
+                if progress.targets[index].passive_scan_percentage != previous_percentage {
+                    should_persist = true;
+                }
+            }
+
+            if current_records == 0 {
+                progress.mark_passive_scan_done(index);
+                self.persist_progress(scan_id, progress).await?;
+                return Ok(ScanExecutionControl::Continue);
+            }
+
+            if should_persist {
+                self.persist_progress(scan_id, progress).await?;
+            }
+
             sleep(self.config.scan_poll_interval).await;
         }
+    }
 
-        progress.mark_passive_scan_done(index);
-        self.persist_progress(scan_id, progress).await?;
-        Ok(ScanExecutionControl::Continue)
+    fn calculate_passive_scan_percentage(initial_records: u64, current_records: u64) -> i32 {
+        if initial_records == 0 {
+            return 100;
+        }
+
+        let current_effective = current_records.min(initial_records);
+        let processed = initial_records.saturating_sub(current_effective);
+        ((processed as f64 / initial_records as f64) * 100.0).floor() as i32
     }
 
     async fn run_active_scan_phase(

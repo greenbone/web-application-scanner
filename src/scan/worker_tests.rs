@@ -276,6 +276,17 @@ async fn mount_alerts_page(server: &MockServer, start: u64, body: &'static str) 
         .await;
 }
 
+async fn mount_pscan_records_to_scan(server: &MockServer, records_to_scan: &'static str) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/pscan/view/recordsToScan"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw(
+            format!(r#"{{"recordsToScan":"{records_to_scan}"}}"#),
+            "application/json",
+        ))
+        .mount(server)
+        .await;
+}
+
 async fn mock_zap_server() -> MockServer {
     let server = MockServer::start().await;
 
@@ -294,6 +305,7 @@ async fn mock_zap_server() -> MockServer {
     )
     .await;
     mount_alerts_page(&server, 1, r#"{"alerts":[]}"#).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -310,6 +322,7 @@ async fn mock_zap_server_safe_mode_without_active_scan_requests() -> MockServer 
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -327,6 +340,7 @@ async fn mock_zap_server_for_ajax_spider_timeout_enforcement() -> MockServer {
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -344,6 +358,7 @@ async fn mock_zap_server_for_unlimited_ajax_spider_timeout() -> MockServer {
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -360,6 +375,7 @@ async fn mock_zap_server_for_default_ajax_spider_timeout() -> MockServer {
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -377,6 +393,7 @@ async fn mock_zap_server_for_spider_timeout_grace_stop_request() -> MockServer {
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -394,6 +411,7 @@ async fn mock_zap_server_for_spider_stop_status_change_timeout() -> MockServer {
     mount_ascan_scan_ok_with_expect(&server, 0).await;
     mount_ascan_status_with_expect(&server, 200, r#"{"status":"100"}"#, 0).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -409,6 +427,7 @@ async fn mock_zap_server_with_active_status_error() -> MockServer {
     mount_ajax_spider_status(&server, "stopped").await;
     mount_ascan_scan_ok(&server).await;
     mount_ascan_status(&server, 500, r#"{"code":"internal"}"#).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -431,6 +450,7 @@ async fn mock_zap_server_with_remove_context_error() -> MockServer {
     )
     .await;
     mount_alerts_page(&server, 1, r#"{"alerts":[]}"#).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 500, r#"{"code":"internal"}"#).await;
 
     server
@@ -448,6 +468,7 @@ async fn mock_zap_server_for_running_stop_in_active_scan() -> MockServer {
     mount_ascan_status(&server, 200, r#"{"status":"10"}"#).await;
     mount_ascan_stop(&server, 200, 1).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -463,6 +484,7 @@ async fn mock_zap_server_for_running_stop_in_spider() -> MockServer {
     mount_ajax_spider_status(&server, "running").await;
     mount_ajax_spider_stop_ok_with_expect(&server, 1).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -480,6 +502,7 @@ async fn mock_zap_server_for_running_stop_in_active_stage_with_stop_failure() ->
     mount_ascan_status(&server, 200, r#"{"status":"10"}"#).await;
     mount_ascan_stop(&server, 500, 1).await;
     mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
     server
@@ -501,6 +524,41 @@ async fn mock_zap_server_for_forced_stop_timeout() -> MockServer {
         r#"{"status":"10"}"#,
     )
     .await;
+    mount_alerts_empty(&server).await;
+    mount_pscan_records_to_scan(&server, "0").await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
+
+    server
+}
+
+async fn mock_zap_server_for_running_stop_in_passive_scan() -> MockServer {
+    let server = MockServer::start().await;
+
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+    mount_pscan_records_to_scan(&server, "10").await;
+    mount_alerts_empty(&server).await;
+    mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
+
+    server
+}
+
+async fn mock_zap_server_for_passive_records_progression() -> MockServer {
+    let server = MockServer::start().await;
+
+    mount_context_new_ok(&server).await;
+    mount_context_include_ok(&server).await;
+    mount_ajax_spider_set_option_max_duration_ok(&server).await;
+    mount_ajax_spider_scan_ok(&server).await;
+    mount_ajax_spider_status(&server, "stopped").await;
+    mount_ascan_scan_ok(&server).await;
+    mount_ascan_status(&server, 200, r#"{"status":"100"}"#).await;
+    mount_pscan_records_to_scan(&server, "0").await;
     mount_alerts_empty(&server).await;
     mount_context_remove(&server, 200, r#"{"Result":"OK"}"#).await;
 
@@ -620,6 +678,57 @@ async fn runtime_processes_requested_scan_to_succeeded_and_persists_alert_result
     assert_eq!(results[0].protocol.as_deref(), Some("tcp"));
     assert!(logs_contain("scan status transition"));
     assert!(logs_contain("scan_queue_wait_seconds"));
+}
+
+#[tokio::test]
+async fn runtime_persists_passive_scan_raw_counts_and_completes_on_zero_records() {
+    let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
+    let server = mock_zap_server_for_passive_records_progression().await;
+    let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
+    let runtime = start_scan_runtime(
+        storage.clone(),
+        zap_client,
+        ScanRuntimeConfig {
+            worker_count: 1,
+            alert_poll_interval: Duration::from_millis(1),
+            scan_poll_interval: Duration::from_millis(1),
+            alert_page_size: 100,
+            passive_scan_placeholder_duration: Duration::from_millis(1),
+            stop_grace_period: Duration::from_secs(300),
+            ..ScanRuntimeConfig::default()
+        },
+    );
+    let service = DefaultScanService::new(storage.clone(), runtime);
+
+    let scan_id = service
+        .create_scan(make_request("https://example.test"))
+        .await
+        .unwrap();
+
+    service.start_scan(&scan_id).await.unwrap();
+    wait_for_status(storage.as_ref(), &scan_id, ScanStatus::Succeeded).await;
+
+    let scan = storage.get_scan(&scan_id).await.unwrap();
+    let progress = scan.progress.expect("progress should be persisted");
+
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_initial_records")
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_current_records")
+            .and_then(serde_json::Value::as_u64),
+        Some(0)
+    );
+    assert_eq!(
+        progress
+            .pointer("/targets/0/passive_scan_percentage")
+            .and_then(serde_json::Value::as_i64),
+        Some(100)
+    );
 }
 
 #[traced_test]
@@ -1022,7 +1131,7 @@ async fn runtime_stop_running_scan_in_spider_stage_transitions_to_stopped_and_cl
 async fn runtime_stop_running_scan_in_passive_stage_transitions_to_stopped_and_clears_stop_requested()
  {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
-    let server = mock_zap_server().await;
+    let server = mock_zap_server_for_running_stop_in_passive_scan().await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
         storage.clone(),

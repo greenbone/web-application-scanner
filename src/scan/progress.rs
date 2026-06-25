@@ -26,6 +26,10 @@ pub struct TargetProgress {
     pub passive_scan_state: StageState,
     #[serde(default)]
     pub passive_scan_percentage: i32,
+    #[serde(default)]
+    pub passive_scan_initial_records: Option<u64>,
+    #[serde(default)]
+    pub passive_scan_current_records: Option<u64>,
     pub overall_percentage: i32,
 }
 
@@ -48,6 +52,8 @@ impl ScanProgress {
                 active_scan_percentage: 0,
                 passive_scan_state: StageState::Pending,
                 passive_scan_percentage: 0,
+                passive_scan_initial_records: None,
+                passive_scan_current_records: None,
                 overall_percentage: 0,
             })
             .collect();
@@ -98,6 +104,12 @@ impl ScanProgress {
         let target = &mut self.targets[index];
         target.passive_scan_state = StageState::Running;
         self.refresh();
+    }
+
+    pub fn set_passive_scan_records(&mut self, index: usize, initial: u64, current: u64) {
+        let target = &mut self.targets[index];
+        target.passive_scan_initial_records = Some(initial);
+        target.passive_scan_current_records = Some(current);
     }
 
     pub fn update_passive_scan(&mut self, index: usize, percentage: i32) {
