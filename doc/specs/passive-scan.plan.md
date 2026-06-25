@@ -129,7 +129,7 @@ Validation recorded:
 
 ### Phase 2: Replace passive placeholder workflow in worker
 
-Status: Planned
+Status: Done (2026-06-25)
 
 - Replace timer-based passive phase logic with records-based polling.
 - Fetch initial records-to-scan count at passive phase start.
@@ -151,6 +151,11 @@ Acceptance:
 - Raw records counts are persisted for observability while percentage/state
   remains the canonical progress signal.
 - Stop handling behavior in passive phase is unchanged.
+
+Validation recorded:
+
+- progress tests executed and passed.
+- worker runtime tests executed and passed.
 
 ### Phase 3: Remove placeholder runtime config
 

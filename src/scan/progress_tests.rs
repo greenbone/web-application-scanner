@@ -23,6 +23,8 @@ fn new_creates_pending_targets_with_zero_progress() {
         assert_eq!(target.active_scan_percentage, 0);
         assert_eq!(target.passive_scan_state, StageState::Pending);
         assert_eq!(target.passive_scan_percentage, 0);
+        assert_eq!(target.passive_scan_initial_records, None);
+        assert_eq!(target.passive_scan_current_records, None);
         assert_eq!(target.overall_percentage, 0);
     }
 }
@@ -278,6 +280,17 @@ fn mark_passive_scan_done_sets_percentage_to_100() {
     assert_eq!(progress.targets[0].passive_scan_state, StageState::Done);
 }
 
+#[test]
+fn set_passive_scan_records_updates_initial_and_current_values() {
+    let hosts = vec!["http://a.example".to_string()];
+    let mut progress = ScanProgress::new(&hosts);
+
+    progress.set_passive_scan_records(0, 123, 45);
+
+    assert_eq!(progress.targets[0].passive_scan_initial_records, Some(123));
+    assert_eq!(progress.targets[0].passive_scan_current_records, Some(45));
+}
+
 // ─── overall_percentage (multi-target) ───────────────────────────────────────
 
 #[test]
@@ -320,6 +333,8 @@ fn as_value_serializes_to_json_and_deserializes_back() {
     assert_eq!(restored.targets[0].spider_state, StageState::Done);
     assert_eq!(restored.targets[0].active_scan_percentage, 50);
     assert_eq!(restored.targets[0].passive_scan_percentage, 0);
+    assert_eq!(restored.targets[0].passive_scan_initial_records, None);
+    assert_eq!(restored.targets[0].passive_scan_current_records, None);
     assert_eq!(restored.targets[0].overall_percentage, 60);
     assert_eq!(restored.overall_percentage, 60);
 }
