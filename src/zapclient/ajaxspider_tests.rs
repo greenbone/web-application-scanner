@@ -12,6 +12,33 @@ use super::{AjaxSpiderStatus, ZapClient, ZapClientError};
 
 const API_KEY: &str = "test-api-key";
 
+async fn mount_ajax_spider_scan(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/scan"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ajax_spider_status(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/view/status"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ajax_spider_stop(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ajaxSpider/action/stop"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test]
 async fn start_ajax_spider_scan_posts_to_zap_ajax_scan_endpoint() {
     let server = MockServer::start().await;
@@ -63,12 +90,11 @@ async fn set_ajax_spider_max_duration_posts_to_zap_option_endpoint() {
 async fn start_ajax_spider_scan_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -91,12 +117,11 @@ async fn start_ajax_spider_scan_returns_unexpected_status_on_http_error() {
 async fn start_ajax_spider_scan_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -116,12 +141,11 @@ async fn start_ajax_spider_scan_returns_parse_error_for_invalid_schema() {
 async fn start_ajax_spider_scan_returns_unexpected_content_when_result_is_not_ok() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/scan"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_scan(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -190,12 +214,11 @@ async fn get_ajax_spider_status_accepts_lowercase_stopped() {
 async fn get_ajax_spider_status_rejects_uppercase_status() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"Stopped\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_status(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"Stopped\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -218,12 +241,11 @@ async fn get_ajax_spider_status_rejects_uppercase_status() {
 async fn get_ajax_spider_status_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_status(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -246,12 +268,11 @@ async fn get_ajax_spider_status_returns_unexpected_status_on_http_error() {
 async fn get_ajax_spider_status_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"progress\":\"100\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_status(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"progress\":\"100\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -271,12 +292,11 @@ async fn get_ajax_spider_status_returns_parse_error_for_invalid_schema() {
 async fn get_ajax_spider_status_returns_unexpected_content_for_unknown_status() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/view/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"100\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_status(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"100\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -320,12 +340,11 @@ async fn stop_ajax_spider_scan_posts_to_zap_ajax_stop_endpoint() {
 async fn stop_ajax_spider_scan_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ajaxSpider/action/stop"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ajax_spider_stop(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");

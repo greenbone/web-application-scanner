@@ -12,6 +12,42 @@ use super::{ZapClient, ZapClientError};
 
 const API_KEY: &str = "test-api-key";
 
+async fn mount_context_list(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/view/contextList"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_new_context(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/newContext"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_remove_context(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/removeContext"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_include_in_context(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/context/action/includeInContext"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test]
 async fn context_list_posts_to_zap_context_list_endpoint() {
     let server = MockServer::start().await;
@@ -43,12 +79,11 @@ async fn context_list_posts_to_zap_context_list_endpoint() {
 #[tokio::test]
 async fn context_list_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/view/contextList"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_context_list(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -70,12 +105,11 @@ async fn context_list_returns_unexpected_status_on_http_error() {
 #[tokio::test]
 async fn context_list_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/view/contextList"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"contexts\":[]}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_context_list(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"contexts\":[]}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -119,12 +153,11 @@ async fn new_context_posts_to_zap_new_context_endpoint() {
 #[tokio::test]
 async fn new_context_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_new_context(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -146,12 +179,11 @@ async fn new_context_returns_unexpected_status_on_http_error() {
 #[tokio::test]
 async fn new_context_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/newContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"id\":\"7\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_new_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"id\":\"7\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -193,12 +225,11 @@ async fn remove_context_posts_to_zap_remove_context_endpoint() {
 #[tokio::test]
 async fn remove_context_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_remove_context(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -220,12 +251,11 @@ async fn remove_context_returns_unexpected_status_on_http_error() {
 #[tokio::test]
 async fn remove_context_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_remove_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -244,12 +274,11 @@ async fn remove_context_returns_parse_error_for_invalid_schema() {
 #[tokio::test]
 async fn remove_context_returns_unexpected_content_when_result_is_not_ok() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_remove_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -271,12 +300,11 @@ async fn remove_context_returns_unexpected_content_when_result_is_not_ok() {
 #[tokio::test]
 async fn remove_context_rejects_lowercase_ok_result() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/removeContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_remove_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -324,12 +352,11 @@ async fn include_in_context_posts_to_zap_include_in_context_endpoint() {
 #[tokio::test]
 async fn include_in_context_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_include_in_context(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -351,12 +378,11 @@ async fn include_in_context_returns_unexpected_status_on_http_error() {
 #[tokio::test]
 async fn include_in_context_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_include_in_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"OK\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -375,12 +401,11 @@ async fn include_in_context_returns_parse_error_for_invalid_schema() {
 #[tokio::test]
 async fn include_in_context_returns_unexpected_content_when_result_is_not_ok() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_include_in_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"Result\":\"FAIL\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -402,12 +427,11 @@ async fn include_in_context_returns_unexpected_content_when_result_is_not_ok() {
 #[tokio::test]
 async fn include_in_context_rejects_lowercase_ok_result() {
     let server = MockServer::start().await;
-    Mock::given(method("POST"))
-        .and(path("/JSON/context/action/includeInContext"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_include_in_context(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"Result\":\"ok\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");

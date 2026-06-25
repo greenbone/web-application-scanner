@@ -12,6 +12,33 @@ use super::{ZapClient, ZapClientError};
 
 const API_KEY: &str = "test-api-key";
 
+async fn mount_ascan_scan(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/scan"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_status(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/view/status"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+async fn mount_ascan_stop(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/JSON/ascan/action/stop"))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test]
 async fn start_active_scan_posts_to_zap_ascan_scan_endpoint() {
     let server = MockServer::start().await;
@@ -43,12 +70,11 @@ async fn start_active_scan_posts_to_zap_ascan_scan_endpoint() {
 async fn start_active_scan_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_scan(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -71,12 +97,11 @@ async fn start_active_scan_returns_unexpected_status_on_http_error() {
 async fn start_active_scan_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/scan"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"scanId\":\"7\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_scan(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"scanId\":\"7\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -120,12 +145,11 @@ async fn get_active_scan_status_gets_zap_ascan_status_endpoint() {
 async fn get_active_scan_status_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_status(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -148,12 +172,11 @@ async fn get_active_scan_status_returns_unexpected_status_on_http_error() {
 async fn get_active_scan_status_returns_parse_error_for_invalid_schema() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"progress\":42}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_status(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"progress\":42}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -173,12 +196,11 @@ async fn get_active_scan_status_returns_parse_error_for_invalid_schema() {
 async fn get_active_scan_status_returns_unexpected_content_for_out_of_range_status() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/view/status"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("{\"status\":\"101\"}"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_status(
+        &server,
+        ResponseTemplate::new(200).set_body_string("{\"status\":\"101\"}"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
@@ -223,12 +245,11 @@ async fn stop_active_scan_posts_to_zap_ascan_stop_endpoint() {
 async fn stop_active_scan_returns_unexpected_status_on_http_error() {
     let server = MockServer::start().await;
 
-    Mock::given(method("POST"))
-        .and(path("/JSON/ascan/action/stop"))
-        .respond_with(ResponseTemplate::new(500).set_body_string("zap unavailable"))
-        .expect(1)
-        .mount(&server)
-        .await;
+    mount_ascan_stop(
+        &server,
+        ResponseTemplate::new(500).set_body_string("zap unavailable"),
+    )
+    .await;
 
     let client =
         ZapClient::new(server.uri(), API_KEY.to_string()).expect("client should be constructed");
