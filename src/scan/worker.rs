@@ -32,7 +32,6 @@ use crate::{
 
 const DEFAULT_SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const DEFAULT_ALERT_PAGE_SIZE: u32 = 100;
-const DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION: Duration = Duration::from_secs(5);
 const DEFAULT_AJAX_SPIDER_TIMEOUT_SECONDS: u64 = 60 * 60;
 const DEFAULT_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(60);
 const DEFAULT_PHASE_STOP_STATUS_CHANGE_TIMEOUT: Duration = Duration::from_secs(60);
@@ -43,7 +42,6 @@ pub struct ScanRuntimeConfig {
     pub alert_poll_interval: Duration,
     pub scan_poll_interval: Duration,
     pub alert_page_size: u32,
-    pub passive_scan_placeholder_duration: Duration,
     pub ajax_spider_timeout_grace_period: Duration,
     pub phase_stop_status_change_timeout: Duration,
     pub stop_grace_period: Duration,
@@ -60,7 +58,6 @@ impl Default for ScanRuntimeConfig {
             alert_poll_interval: Duration::from_secs(10),
             scan_poll_interval: DEFAULT_SCAN_POLL_INTERVAL,
             alert_page_size: DEFAULT_ALERT_PAGE_SIZE,
-            passive_scan_placeholder_duration: DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION,
             ajax_spider_timeout_grace_period: DEFAULT_AJAX_SPIDER_TIMEOUT_GRACE_PERIOD,
             phase_stop_status_change_timeout: DEFAULT_PHASE_STOP_STATUS_CHANGE_TIMEOUT,
             stop_grace_period: Duration::from_secs(300),

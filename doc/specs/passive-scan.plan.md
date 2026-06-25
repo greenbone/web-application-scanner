@@ -159,7 +159,7 @@ Validation recorded:
 
 ### Phase 3: Remove placeholder runtime config
 
-Status: Planned
+Status: Done (2026-06-25)
 
 - Remove DEFAULT_PASSIVE_SCAN_PLACEHOLDER_DURATION and related config fields
   from scan runtime configuration.
@@ -171,6 +171,10 @@ Acceptance:
 
 - No runtime code references passive_scan_placeholder_duration.
 - Runtime and tests compile with updated config structs.
+
+Validation recorded:
+
+- worker runtime tests executed and passed.
 
 ### Phase 4: Update worker runtime tests
 
