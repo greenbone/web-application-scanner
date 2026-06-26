@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 use tracing_test::traced_test;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use wiremock::{
     Mock, MockServer, Request, Respond, ResponseTemplate,
@@ -953,11 +953,9 @@ async fn runtime_keeps_passive_percentage_monotonic_when_records_temporarily_inc
 #[tokio::test]
 async fn runtime_keeps_passive_percentage_stable_during_plateau_and_completes_on_zero() {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
-    let server = mock_zap_server_for_passive_records_sequence(
-        vec!["10", "8", "8", "8", "8", "8", "0"],
-        "0",
-    )
-    .await;
+    let server =
+        mock_zap_server_for_passive_records_sequence(vec!["10", "8", "8", "8", "8", "8", "0"], "0")
+            .await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
         storage.clone(),
@@ -1054,11 +1052,9 @@ async fn runtime_keeps_passive_percentage_monotonic_across_multiple_temporary_in
 #[tokio::test]
 async fn runtime_ignores_records_increase_above_initial_until_a_lower_value_appears() {
     let (storage, _temp_dir) = temporary_sqlite_storage().await.unwrap();
-    let server = mock_zap_server_for_passive_records_sequence(
-        vec!["10", "12", "12", "12", "9", "0"],
-        "0",
-    )
-    .await;
+    let server =
+        mock_zap_server_for_passive_records_sequence(vec!["10", "12", "12", "12", "9", "0"], "0")
+            .await;
     let zap_client = ZapClient::new(server.uri(), "test-api-key".to_string()).unwrap();
     let runtime = start_scan_runtime(
         storage.clone(),
