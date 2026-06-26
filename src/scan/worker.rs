@@ -510,7 +510,8 @@ impl ScanWorker {
                 min_records_seen = current_records;
 
                 let previous_percentage = progress.targets[index].passive_scan_percentage;
-                let percentage = Self::calculate_passive_scan_percentage(initial_records, current_records);
+                let percentage =
+                    Self::calculate_passive_scan_percentage(initial_records, current_records);
                 progress.update_passive_scan(index, percentage);
 
                 if progress.targets[index].passive_scan_percentage != previous_percentage {
