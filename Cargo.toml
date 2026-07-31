@@ -43,7 +43,7 @@ utoipa = { version = "5", features = ["axum_extras"], optional = true }
 utoipa-swagger-ui = { version = "9", features = ["axum"], optional = true }
 
 [dev-dependencies]
-serial_test = "3.5.0"
+serial_test = "4.0.1"
 tempfile = "3.27.0"
 tracing-test = "0.2"
 wiremock = "0.6"
