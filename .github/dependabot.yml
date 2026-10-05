@@ -25,6 +25,8 @@ updates:
         update-types:
           - "minor"
           - "patch"
+        exclude-patterns:
+          - "utoipa*"
     commit-message:
       prefix: "Deps"
 
