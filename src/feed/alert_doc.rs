@@ -6,7 +6,7 @@ use std::{collections::BTreeMap, fmt, path::Path, path::PathBuf, str::FromStr};
 
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Number as JsonNumber, Value as JsonValue};
-use serde_yaml::Value;
+use yaml_serde::Value;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AlertId {
@@ -150,10 +150,10 @@ pub fn parse_alert_doc(path: &Path, content: &str) -> Result<Option<AlertDoc>, S
 
     let (frontmatter, body) = split_frontmatter(content)?;
     let raw_value: Value =
-        serde_yaml::from_str(frontmatter).map_err(|err| format!("malformed YAML: {err}"))?;
+        yaml_serde::from_str(frontmatter).map_err(|err| format!("malformed YAML: {err}"))?;
     let raw_frontmatter = yaml_to_json_value(&raw_value)?;
     let raw: Frontmatter =
-        serde_yaml::from_value(raw_value).map_err(|err| format!("malformed YAML: {err}"))?;
+        yaml_serde::from_value(raw_value).map_err(|err| format!("malformed YAML: {err}"))?;
     let kind = match raw.kind.as_deref() {
         Some("alert") => AlertKind::Alert,
         Some("alertset") => AlertKind::AlertSet,
@@ -309,7 +309,7 @@ fn yaml_to_json_value(value: &Value) -> Result<JsonValue, String> {
     }
 }
 
-fn yaml_number_to_json(value: &serde_yaml::Number) -> Result<JsonValue, String> {
+fn yaml_number_to_json(value: &yaml_serde::Number) -> Result<JsonValue, String> {
     if let Some(value) = value.as_i64() {
         Ok(JsonValue::Number(JsonNumber::from(value)))
     } else if let Some(value) = value.as_u64() {

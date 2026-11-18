@@ -87,7 +87,7 @@ Represent parsed alerts with typed structs instead of ad hoc string maps:
 - `GeneratedVt`: output file name, OID, NASL metadata fields, and rendered NASL.
 - `ValidationReport`: errors and warnings with source file paths.
 
-YAML frontmatter should be parsed with `serde_yaml`. Fields that are not needed
+YAML frontmatter should be parsed with `yaml_serde`. Fields that are not needed
 for generation can be preserved in a loose map only if diagnostics need them.
 
 ## Incomplete Metadata Policy
@@ -266,7 +266,7 @@ debugging; release packaging, signing, and publication remain separate work.
 
 ## Risks and Mitigations
 
-- YAML/frontmatter variation: use `serde_yaml`, typed optional fields, and clear
+- YAML/frontmatter variation: use `yaml_serde`, typed optional fields, and clear
   validation messages.
 - NASL escaping bugs: centralize string rendering in `nasl.rs` and test quotes,
   backslashes, newlines, and long remediation text.

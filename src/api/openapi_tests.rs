@@ -23,13 +23,17 @@ async fn router_builds_successfully_with_openapi_endpoints() {
 
 #[tokio::test]
 async fn openapi_yaml_handler_returns_valid_yaml() {
-    use crate::api::openapi::get_openapi_yaml;
+    use crate::api::openapi::{ApiDoc, get_openapi_yaml};
+    use utoipa::OpenApi;
 
     let response = get_openapi_yaml().await.into_response();
     assert_eq!(response.status(), 200);
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let yaml = String::from_utf8(body.to_vec()).unwrap();
+    // Protect the complete specification's semantics across YAML serializer changes.
+    let parsed: serde_json::Value = yaml_serde::from_str(&yaml).unwrap();
+    assert_eq!(parsed, serde_json::to_value(ApiDoc::openapi()).unwrap());
     assert!(
         yaml.contains("openapi:"),
         "YAML should contain openapi version"

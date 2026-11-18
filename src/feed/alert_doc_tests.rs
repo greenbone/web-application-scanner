@@ -77,6 +77,52 @@ Body text.
 }
 
 #[test]
+fn parser_preserves_yaml_scalar_keys_tags_and_nested_values_after_parser_migration() {
+    let doc = parse_alert_doc(
+        Path::new("10020.md"),
+        r#"---
+type: alert
+alertid: 10020
+cvss_base: 5.5
+references: https://example.com/ref
+solution: |
+  First line.
+  Second line.
+metadata:
+  42: !source tagged text
+  true: [null, "", false, -7, 18446744073709551615, 1.5, "NO"]
+---
+Body text.
+"#,
+    )
+    .unwrap()
+    .unwrap();
+
+    assert_eq!(doc.alert_id.to_string(), "10020");
+    assert_eq!(doc.cvss_base.as_deref(), Some("5.5"));
+    assert_eq!(doc.references, ["https://example.com/ref"]);
+    assert_eq!(doc.solution.as_deref(), Some("First line.\nSecond line."));
+    assert_eq!(
+        doc.raw_frontmatter["metadata"],
+        serde_json::json!({
+            "42": "tagged text",
+            "true": [null, null, false, -7, u64::MAX, 1.5, "NO"]
+        })
+    );
+}
+
+#[test]
+fn parser_rejects_malformed_yaml_after_parser_migration() {
+    let err = parse_alert_doc(
+        Path::new("broken.md"),
+        "---\ntype: alert\nalertid: [\n---\nBody text.\n",
+    )
+    .unwrap_err();
+
+    assert!(err.starts_with("malformed YAML:"), "{err}");
+}
+
+#[test]
 fn parser_rejects_missing_frontmatter_so_invalid_sources_fail_early() {
     let err = parse_alert_doc(Path::new("broken.md"), "title: Missing").unwrap_err();
     assert_eq!(err, "missing YAML frontmatter delimiter");

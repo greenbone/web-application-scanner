@@ -70,7 +70,7 @@ pub struct ApiDoc;
 /// Returns the complete OpenAPI 3.0 specification in YAML format.
 pub async fn get_openapi_yaml() -> impl IntoResponse {
     let openapi = ApiDoc::openapi();
-    let yaml = serde_yaml::to_string(&openapi)
+    let yaml = yaml_serde::to_string(&openapi)
         .unwrap_or_else(|_| "error: failed to serialize OpenAPI spec".to_string());
 
     (
