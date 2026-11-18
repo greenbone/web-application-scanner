@@ -116,7 +116,7 @@ index consumers.
 Add an index-generation path to the existing `src/feed` module:
 
 - Extend `alert_doc.rs` so parsed documents retain the complete YAML
-  frontmatter as `serde_yaml::Value` or an equivalent lossless structure that
+  frontmatter as `yaml_serde::Value` or an equivalent lossless structure that
   can be serialized to JSON.
 - Add an `AlertIndexEntry` model that is separate from `GeneratedVt`. The index
   is based on parsed source documents, not the final NASL candidate list.
